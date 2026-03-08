@@ -1,0 +1,61 @@
+div.code-highlighter-container {
+    --highlighter-error-color:    red;
+    --highlighter-error-fg-color: white;
+}
+
+div.code-highlighter-container pre {
+    position: relative;
+    z-index:  1;
+}
+
+div.code-highlighter-container span.error-line::before {
+    content:        "-";
+    color:          transparent;
+    user-select:    none;
+    pointer-events: none;
+}
+
+div.code-highlighter-container .code-highlighter-errors {
+    display:        flex;
+    flex-direction: column;
+    position:       absolute;
+    top:            0;
+    width:          100%;
+}
+
+div.code-highlighter-container {
+    position: relative;
+}
+
+div.code-highlighter-container div.errors {
+    position:         absolute;
+    width:            100%;
+    background-color: var(--highlighter-error-color);
+    white-space:      wrap;
+    display:          flex;
+    flex-direction:   column;
+    z-index:          3;
+    padding:          1ex;
+    color:            var(--highlighter-error-fg-color);
+}
+
+div.code-highlighter-container div.errors > :not(:last-child)::after {
+    display: block;
+    content: "-";
+    color:   transparent;
+}
+
+div.code-highlighter-container span.error-line:not(.no-errors)::after {
+    content:       "";
+    width:         100%;
+    margin-top:    -5px;
+    height:        5px;
+    display:       block;
+    border-bottom: 1px dashed var(--highlighter-error-color);
+    position:      absolute;
+    z-index:       2;
+}
+
+div.code-highlighter-container .error-line:not(:hover) > div.errors:not(:hover) {
+    display: none;
+}

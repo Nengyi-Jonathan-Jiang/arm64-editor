@@ -1,0 +1,93 @@
+.resizable-panes-container {
+    position: relative;
+    display:  flex;
+    width:    100%;
+    height:   100%;
+    overflow: hidden;
+}
+
+.horizontal.resizable-panes-container {
+    flex-direction: row;
+}
+
+.vertical.resizable-panes-container {
+    flex-direction: column;
+}
+
+div.resizable-panes-container > div.resizer {
+    z-index:  2;
+    position: relative;
+}
+
+div.horizontal.resizable-panes-container > div.resizer {
+    width:  0;
+    height: 100%;
+    cursor: ew-resize;
+}
+
+div.vertical.resizable-panes-container > div.resizer {
+    width:  100%;
+    height: 0;
+    cursor: ns-resize;
+}
+
+div.resizable-panes-container > div.resizer::before,
+div.resizable-panes-container > div.resizer::after {
+    position: absolute;
+    display:  block;
+    content:  "";
+}
+
+div.horizontal.resizable-panes-container > div.resizer::before,
+div.horizontal.resizable-panes-container > div.resizer::after {
+    top:    0;
+    bottom: 0;
+}
+
+div.vertical.resizable-panes-container > div.resizer::before,
+div.vertical.resizable-panes-container > div.resizer::after {
+    left:  0;
+    right: 0;
+}
+
+div.horizontal.resizable-panes-container > div.resizer::before {
+    left:             -1px;
+    width:            2px;
+    background-color: #000;
+}
+
+div.horizontal.resizable-panes-container > div.resizer::after {
+    left:             -5px;
+    width:            10px;
+    background-color: #0000;
+}
+
+
+div.vertical.resizable-panes-container > div.resizer::before {
+    top:              -1px;
+    height:           2px;
+    background-color: #000;
+}
+
+div.vertical.resizable-panes-container > div.resizer::after {
+    top:              -5px;
+    height:           10px;
+    background-color: #0000;
+}
+
+
+div.resizable-panes-container > div.resizer:hover::after {
+    background-color: #0004;
+}
+
+.resizable-pane {
+    position: relative;
+}
+
+.horizontal.resizable-panes-container > .resizable-pane {
+    overflow-x: hidden;
+}
+
+.vertical.resizable-panes-container > .resizable-pane {
+    overflow-y: hidden;
+}
