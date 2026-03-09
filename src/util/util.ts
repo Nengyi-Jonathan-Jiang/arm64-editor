@@ -4,12 +4,29 @@ export function wrapUndef<T>(
 export function wrapUndef<T, U>(
     x: T | undefined, f: (x: T) => U
 ): [] | [U];
+/**
+ * Wraps x in an 1-tuple. If x is undefined, returns the empty tuple.
+ * 
+ * This is useful when propagating optional arguments
+ */
 export function wrapUndef(
-    x: any, f ?: (x: any) => any
-): any {  
+    x: any, f?: (x: any) => any
+): any {
     return x === undefined ? [] : [f ? f(x) : x];
 }
 
+/** 
+ * Union type of number literals from 0 to N - 1
+ */
+export type IntRange<N extends number> = IntRange_<N, []>;
+type IntRange_<N extends number, A extends number[]> 
+    = A['length'] extends N ? A[number] : IntRange_<N, [...A, A['length']]>;
+
+/** Generate a random BigInt with the given number of bits */
+export function randUnsignedBigint(numBits: number): bigint {
+    const res = randUnsignedBigintBytes((numBits + 7) >> 3);
+    return res & ((1n << BigInt(numBits)) - 1n);
+}
 function randUnsignedBigintBytes(numBytes: number): bigint {
     if (numBytes === 1) {
         return BigInt(~~(Math.random() * 256));
@@ -20,41 +37,20 @@ function randUnsignedBigintBytes(numBytes: number): bigint {
         .reduce((a, b) => a + b);
 }
 
-(window as any)['randB'] = randUnsignedBigintBytes
-
-/** Generate a random BigInt with the given number of bits */
-export function randUnsignedBigint(numBits: number): bigint {
-    const res = randUnsignedBigintBytes((numBits + 7) >> 3);
-    return res & ((1n << BigInt(numBits)) - 1n);
-}
-
+/** Converts a number to a hex string with the given number of digits */
 export function toHexString(n: number | bigint, bytes: number) {
     return n.toString(16).padStart(bytes * 2, '0');
 }
 
-// Common BigInts
-
-/** 2^7 */
-export const BigInt7 = 1n << 7n;
-/** 2^8 */
-export const BigInt8 = 1n << 8n;
-/** 2^8 - 1 */
-export const BigInt8Mask = BigInt8 - 1n;
-/** 2^15 */
-export const BigInt15 = 1n << 15n;
-/** 2^16 */
-export const BigInt16 = 1n << 16n;
-/** 2^16 - 1 */
-export const BigInt16Mask = BigInt16 - 1n;
-/** 2^31*/
-export const BigInt31 = 1n << 31n;
-/** 2^32 */
-export const BigInt32 = 1n << 32n;
-/** 2^32 - 1 */
-export const BigInt32Mask = BigInt32 - 1n;
-/** 2^63 */
-export const BigInt63 = 1n << 63n;
-/** 2^64 */
-export const BigInt64 = 1n << 64n;
-/** 2^64 - 1 */
-export const BigInt64Mask = BigInt64 - 1n;
+export function isUint64N(n: bigint) : boolean {
+    return (n & 0x8000_0000_0000_0000n) != 0n;
+}
+export function isUint64Z(n: bigint) : boolean {
+    return (n & 0xffff_ffff_ffff_ffffn) == 0n;
+}
+export function isUint64C(n: bigint) : boolean {
+    return n >= 0x1_0000_0000_0000_0000n;
+}
+export function getUint64Complement(n: bigint): bigint {
+    return (~n + 1n) & 0xffff_ffff_ffff_ffffn;
+}
