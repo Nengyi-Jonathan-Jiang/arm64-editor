@@ -8,7 +8,11 @@ import type { State, RegisterSP, RegisterZR, RegisterGP } from "./state";
 type _Register = RegisterSP | RegisterZR;
 
 export type Instruction = Readonly<
-    STUR | LDUR | MOV | ADRP | ADDS | SUBS | CMN
+    LDUR | STUR | MOVK | MOVZ |
+    ADD | ADDS | CMN | SUB | SUBS | CMP |
+    MVN | ORR | EOR | ANDS | TST | LSL | LSR | UBFM | ASR |
+    B | BL | RET |
+    NOP | HLT
 >;
 
 export type InstructionType = Instruction["opcode"];
@@ -19,7 +23,7 @@ abstract class InstructionBase<
     O extends Record<string, Operand> = Record<string, Operand>
 > {
     abstract readonly opcode: string;
-    private readonly operands: Readonly<O>;
+    protected readonly operands: Readonly<O>;
 
     /** Dummy value with the type of the operands */
     // @ts-ignore
@@ -54,36 +58,43 @@ abstract class InstructionBase<
     ) {
         this.checkCondition(this.operands[op], condition, op as string);
     }
-    protected checkRegisterGP(r: RegisterGP | Filter<O, RegisterGP>): void {
-        if (typeof r === 'string') r = this.operands[r] as RegisterGP;
+
+    private checkRegisterIsGP(r: RegisterGP, name: string): void {
         this.checkCondition(
-            r, typeof r != "number" || r < 0 || r > 30, 'register'
+            r, 
+            typeof r == "number" && r >= 0 && r <= 30,
+            `register ${name}`
         );
     }
-    protected checkRegisterSP(r: RegisterSP | Filter<O, RegisterSP>): void {
-        if (typeof r === 'string') r = this.operands[r] as RegisterSP;
-        if (r !== "SP") this.checkRegisterGP(r as RegisterGP);
+
+    protected checkRegisterGP(r: Filter<O, RegisterGP>): void {
+        this.checkRegisterIsGP(this.operands[r] as RegisterGP, r);
     }
-    protected checkRegisterZR(r: RegisterZR | Filter<O, RegisterZR>): void {
-        if (typeof r === 'string') r = this.operands[r] as RegisterZR;
-        if (r !== "ZR") this.checkRegisterGP(r as RegisterGP);
+    protected checkRegisterSP(r: Filter<O, RegisterSP>): void {
+        if (this.operands[r] === "SP") return;
+        this.checkRegisterIsGP(this.operands[r] as RegisterGP, r);
     }
-    protected checkRegister(r: _Register | Filter<O, _Register>): void {
-        if (typeof r === 'string') r = this.operands[r] as _Register;
-        if (r !== "SP" && r !== "ZR") this.checkRegisterGP(r as RegisterGP);
+    protected checkRegisterZR(r: Filter<O, RegisterZR>): void {
+        if (this.operands[r] === "ZR") return;
+        this.checkRegisterIsGP(this.operands[r] as RegisterGP, r);
+    }
+    protected checkRegister(r: Filter<O, _Register>): void {
+        if (this.operands[r] === "SP") return;
+        if (this.operands[r] === "ZR") return;
+        this.checkRegisterIsGP(this.operands[r] as RegisterGP, r);
     }
     /**
      * Check if a given BigInt has at most the given number of bits. If b is 
      * negative, the range is signed; otherwise it is unsigned.
      */
     protected checkOperandRange(op: Filter<O, bigint>, b: number) {
-        const b_ = BigInt(b);
+        const B = BigInt(b);
         const n = this.operands[op] as bigint;
         this.checkCondition(n,
-            b_ < 0n
-                ? n < -(1n << ~b_) || n >= (1n << ~b_) // Note that ~b_ = -b_ - 1
-                : n < 0n && n >= (1n << b_),
-            op as string
+            B < 0n
+                ? n >= -(1n << ~B) && n < (1n << ~B)
+                : n >= 0n && n < (1n << B),
+            `${b < 0 ? 's' : ''}imm${Math.abs(b)} ${op}`
         )
     }
 }
@@ -180,7 +191,7 @@ abstract class MOV extends InstructionBase<{
     protected checkOperands(): void {
         this.checkRegisterGP("dst");
         this.checkOperandRange("value", 16);
-        this.checkOperand("shift", x => ![0n, 16n, 32n, 48n].includes(x));
+        this.checkOperand("shift", x => [0n, 16n, 32n, 48n].includes(x));
     }
 
     applyTo({ dst, value, shift }: this["O"], state: State): void {
@@ -250,18 +261,19 @@ export class ADDS extends BinOpRR {
     }
 }
 
-export class CMN extends BinOpRI<"ZR"> {
+export class CMN extends BinOpRX<"ZR"> {
     readonly opcode = "CMN";
 
-    constructor({ a, b }: { a: RegisterGP, b: bigint }) {
+    constructor({ a, b }: { a: RegisterGP, b: bigint | RegisterGP }) {
         super({ dst: "ZR", a, b });
     }
 
     protected checkOperands(): void {
         this.checkRegisterGP("a");
-        this.checkOperandRange("b", 12);
+        if (typeof this.operands.b === "bigint")
+            this.checkOperandRange("b" as never, 12);
+        else this.checkRegisterGP("b" as never);
     }
-
     doOperation = ADDS.prototype.doOperation;
 }
 
@@ -300,16 +312,18 @@ export class SUBS extends BinOpRR {
     }
 }
 
-export class CMP extends BinOpRI<"ZR"> {
+export class CMP extends BinOpRX<"ZR"> {
     readonly opcode = "CMP";
 
-    constructor({ a, b }: { a: RegisterGP, b: bigint }) {
+    constructor({ a, b }: { a: RegisterGP, b: bigint | RegisterGP }) {
         super({ dst: "ZR", a, b });
     }
 
     protected checkOperands(): void {
         this.checkRegisterGP("a");
-        this.checkOperandRange("b", 12);
+        if (typeof this.operands.b === "bigint")
+            this.checkOperandRange("b" as never, 12);
+        else this.checkRegisterGP("b" as never);
     }
 
     doOperation = SUBS.prototype.doOperation;
@@ -402,7 +416,8 @@ export class LSL extends BinOpRX {
     protected checkOperands(): void {
         this.checkRegisterGP("dst");
         this.checkRegisterGP("a");
-        if (this.isI) this.checkRegister("b" as never);
+        if (typeof this.operands.b === "bigint")
+            this.checkRegister("b" as never);
         else this.checkOperandRange("b" as never, 6);
     }
 
@@ -417,7 +432,8 @@ export class LSR extends BinOpRX {
     protected checkOperands(): void {
         this.checkRegisterGP("dst");
         this.checkRegisterGP("a");
-        if (this.isI) this.checkRegister("b" as never);
+        if (typeof this.operands.b === "bigint")
+            this.checkRegister("b" as never);
         else this.checkOperandRange("b" as never, 6);
     }
 
@@ -462,15 +478,9 @@ export class UBFM extends InstructionBase<{
     }
 }
 
-const B_condMap = [ // DO NOT CHANGE ORDER
-    "EQ", "NE",
-    "CS", "HS",
-    "CC", "LO",
-    "MI", "PL",
-    "VS", "VC",
-    "HI", "LS",
-    "GE", "LT", "GT", "LE",
-    "AL", "NV"
+export const B_condMap = [ // DO NOT CHANGE ORDER
+    "eq", "ne", "cs", "hs", "cc", "lo", "mi", "pl", "vs",
+    "vc", "hi", "ls", "ge", "lt", "gt", "le", "al", "nv"
 ] as const;
 
 
@@ -502,7 +512,7 @@ export class B extends InstructionBase<{ dst: bigint, cond: bigint }> {
     ] as const;
 
     constructor({ dst, cond }: { dst: bigint, cond: B.cond | undefined }) {
-        super({ dst, cond: BigInt(B_condMap.indexOf(cond ?? "AL")) });
+        super({ dst, cond: BigInt(B_condMap.indexOf(cond ?? "al")) });
         this.isUnconditional = cond === undefined;
         this.opcode = cond === undefined ? "B" : `B.${cond}`;
     }
@@ -528,37 +538,37 @@ export class BL extends InstructionBase<{ dst: bigint }> {
         this.checkOperandRange("dst", -26);
     }
 
-    applyTo({dst}: this["O"], state: State): void | boolean {
+    applyTo({ dst }: this["O"], state: State): void | boolean {
         state.setRegister(30, state.PC + 4n);
         state.branchPCrel(dst << 2n);
         return true;
     }
 }
 
-export class RET extends InstructionBase<{dst: RegisterGP}> {
+export class RET extends InstructionBase<{ dst: RegisterGP }> {
     readonly opcode = "RET";
 
-    constructor({dst = 30}: {dst: RegisterGP}) {
-        super({dst});
+    constructor({ dst = 30 }: { dst: RegisterGP }) {
+        super({ dst });
     }
 
     protected checkOperands(): void {
         this.checkRegisterGP("dst");
     }
 
-    applyTo({dst}: this["O"], state: State): void | boolean {
+    applyTo({ dst }: this["O"], state: State): void | boolean {
         state.branchPCabs(state.getRegister(dst));
     }
 }
 
 export class NOP extends InstructionBase<{}> {
     readonly opcode = "NOP";
-    protected checkOperands(): void {}
-    applyTo(): void {}
+    protected checkOperands(): void { }
+    applyTo(): void { }
 }
 
 export class HLT extends InstructionBase<{}> {
     readonly opcode = "HLT";
-    protected checkOperands(): void {}
-    applyTo(): void {}
+    protected checkOperands(): void { }
+    applyTo(): void { }
 }

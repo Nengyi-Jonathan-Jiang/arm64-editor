@@ -1,5 +1,5 @@
-import {ComponentType, CSSProperties, RefObject, useEffect, useRef, useState} from "react";
-import {useListenerOnWindow, useRefs} from "@/util/hooks";
+import { type ComponentType, type CSSProperties, type RefObject, useEffect, useRef, useState } from "react";
+import { useListenerOnWindow, useRefs } from "./hooks";
 
 type SelectOptionComponentProps<OptionValueType, RefType extends HTMLElement> = {
     value: OptionValueType,
@@ -9,11 +9,11 @@ type SelectOptionComponentProps<OptionValueType, RefType extends HTMLElement> = 
 type SelectOptionComponent<OptionValueType, RefType extends HTMLElement> = ComponentType<SelectOptionComponentProps<OptionValueType, RefType>>;
 
 function BasicSelectOptionComponent<OptionValueType>
-({
-     value,
-     elementRef,
-     ...otherProps
- }: SelectOptionComponentProps<OptionValueType, HTMLSpanElement>) {
+    ({
+        value,
+        elementRef,
+        ...otherProps
+    }: SelectOptionComponentProps<OptionValueType, HTMLSpanElement>) {
     return <span ref={elementRef} {...otherProps}>{value?.toString()}</span>
 }
 
@@ -49,23 +49,22 @@ type SelectProps<OptionValueType, ActiveOptionRefType extends HTMLElement, Optio
 };
 
 export function Select<OptionValueType, ActiveOptionRefType extends HTMLElement, OptionRefType extends HTMLElement>
-({
-     onChange,
-     options,
-     value,
-     disabled,
-     ActiveOptionComponent = BasicSelectOptionComponent,
-     OptionComponent = BasicSelectOptionComponent,
-     containerProps = () => ({}),
-     activeOptionProps = () => ({}),
-     optionProps = () => ({}),
-     ...otherProps
- }: SelectProps<OptionValueType, ActiveOptionRefType, OptionRefType>) {
+    ({
+        onChange,
+        options,
+        value,
+        disabled,
+        ActiveOptionComponent = BasicSelectOptionComponent,
+        OptionComponent = BasicSelectOptionComponent,
+        containerProps = () => ({}),
+        activeOptionProps = () => ({}),
+        optionProps = () => ({}),
+        ...otherProps
+    }: SelectProps<OptionValueType, ActiveOptionRefType, OptionRefType>) {
     const [isOpen, setIsOpen] = (
         (x) => disabled ? [false, (_: boolean) => void 0] : x
     )(useState(false));
 
-    const open = () => setIsOpen(true);
     const close = () => setIsOpen(false);
     const toggleOpen = () => setIsOpen(!isOpen);
 
@@ -74,7 +73,7 @@ export function Select<OptionValueType, ActiveOptionRefType extends HTMLElement,
     const optionRefs = useRefs<OptionRefType>(options.length);
 
     useEffect(() => {
-        optionRefs.forEach(({current}, i) => {
+        optionRefs.forEach(({ current }, i) => {
             if (current === null) return;
             current.onclick = () => {
                 onChange(options[i]);
@@ -83,11 +82,14 @@ export function Select<OptionValueType, ActiveOptionRefType extends HTMLElement,
         })
     }, [optionRefs, isOpen]);
 
-    useListenerOnWindow("mousedown", e => {
-        if (containerRef.current === null || e.target === null) return;
+    useListenerOnWindow({
+        listenerType: "mousedown",
+        listener: e => {
+            if (containerRef.current === null || e.target === null) return;
 
-        if (!containerRef.current.contains(e.target as Node)) {
-            close();
+            if (!containerRef.current.contains(e.target as Node)) {
+                close();
+            }
         }
     })
 
@@ -95,14 +97,14 @@ export function Select<OptionValueType, ActiveOptionRefType extends HTMLElement,
         <div onClick={() => {
             toggleOpen();
         }}>
-            <ActiveOptionComponent value={value} elementRef={activeOptionRef} {...activeOptionProps(value)}/>
+            <ActiveOptionComponent value={value} elementRef={activeOptionRef} {...activeOptionProps(value)} />
         </div>
         {
-            <div style={{...(isOpen ? selectOptionsOpenStyle : selectOptionsClosedStyle)}}>
+            <div style={{ ...(isOpen ? selectOptionsOpenStyle : selectOptionsClosedStyle) }}>
                 <div style={selectOptionsStyle}>
                     {options.map((option, i) =>
                         <OptionComponent value={option} elementRef={optionRefs[i]}
-                                         key={i} {...optionProps(option, value)}/>
+                            key={i} {...optionProps(option, value)} />
                     )}
                 </div>
             </div>

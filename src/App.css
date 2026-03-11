@@ -1,42 +1,89 @@
+body {
+    position:    absolute;
+    left:        0;
+    top:         0;
+    padding:     0;
+    margin:      0;
+    width:       100vw;
+    height:      100vh;
+    overflow:    hidden;
+    font-family: "JetBrains Mono", monospace;
+    font-size:   12px;
+}
+
+::selection {
+    background-color: var(--color-darker);
+}
+
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+    width: 100%;
+    height: 100%;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+#asm-editor-outer {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+    padding: 0 0.5em;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+#asm-editor-outer>.line-numbers {
+    position: relative;
+    flex: 0;
+    color: var(--color-medium);
+    user-select: none;
+    height: fit-content
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.line-numbers::after {
+    border-left: 1px solid var(--color-medium);
+    position: absolute;
+    width: 1.5em;
+    height: 100%;
+    content:"";
+    top: 0;
+    background-color: var(--color-dark);
+    z-index: 1;
+    transform: translateX(-1px);
 }
 
-.card {
-  padding: 2em;
+#asm-editor {
+    flex: 1;
+    overflow-x: scroll;
+    overflow-y: visible;
+    padding-left: 1.5em;
+    height: fit-content;
 }
 
-.read-the-docs {
-  color: #888;
+input#function-name {
+    field-sizing: content;
+    color: var(--color-green);
+    caret-color: var(--color-light);
+}
+
+input#function-name::placeholder {
+    color: var(--color-medium);
+}
+
+.code-highlighter-container .error {
+    background: color-mix(var(--color-red) 20%, transparent);
+}
+.code-highlighter-container :is(.comment, .punct) {
+    color: var(--color-medium);
+}
+.code-highlighter-container .label {
+    color: var(--color-green);
+}
+.code-highlighter-container .opcode {
+    color: var(--color-red);
+}
+.code-highlighter-container .condition {
+    color: var(--color-orange);
+}
+.code-highlighter-container :is(.registerGP,.ZR,.SP) {
+    color: var(--color-yellow);
+}
+.code-highlighter-container :is(.imm) {
+    color: var(--color-purple);
 }

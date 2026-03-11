@@ -14,6 +14,8 @@ div.code-overlay {
     width:       100%;
     height:      fit-content;
     user-select: none;
+    pointer-events: none;
+    /* overflow: hidden; */
 }
 
 textarea.code-input {
@@ -33,5 +35,8 @@ textarea.code-input {
     color:       transparent;
     caret-color: var(--color-light);
     background:  transparent;
-    z-index:     1;
+}
+
+textarea.code-input::selection {
+    color: var(--color-darkest)
 }

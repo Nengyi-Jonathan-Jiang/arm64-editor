@@ -1,45 +1,47 @@
 import type { ReactNode } from "react";
+import { getTokenContents, type Token } from "../chArm/tokenizer";
+import { splitWhitespace } from "../util/util";
 
-export function CodeHighlighter({children: input, rules}: {
-    children: string,
-    rules: { [_: string]: RegExp }
+function splitString(str: string, key: string): ReactNode[] {
+    const [a, b, c] = splitWhitespace(str);
+    return [
+        ...(!a ? [] : [a]),
+        ...(!b ? [] : [<span className="error" key={key}>{b}</span>]),
+        ...(!b ? [] : [c]),
+    ];
+}
+
+export function CodeHighlighter({ value, tokens }: {
+    value: string,
+    tokens: readonly Token[]
 }): ReactNode {
     const elements: ReactNode[] = [];
-    const rulesArr: [string, RegExp][] = [];
-    for (const property of Object.getOwnPropertyNames(rules)) {
-        rulesArr.push([property, rules[property]]);
+
+    let currentIndex = 0;
+    let currentToken = 0;
+    for (const token of tokens) {
+        const before = value.substring(currentIndex, token.originalRange[0]);
+        currentIndex = token.originalRange[1];
+
+        elements.push(...splitString(
+            before,
+            `${currentToken}|${elements.length}`
+        ));
+        elements.push(
+            <span className={
+                token.type + (token.isError ? " error" : "")}
+                key={currentToken++}
+            >
+                {getTokenContents(token)}
+            </span>
+        );
     }
+    elements.push(...splitString(value.substring(currentIndex), 'END'));
 
-    let currentTokenIndex = 0;
-
-    while (input.length) {
-        let matchedClass: string | null = null;
-        let bestLength: number = 0;
-        for (const [rule, regex] of rulesArr) {
-            const match = input.match(regex);
-            if (!match) continue;
-
-            const matchedLength = match[0].length;
-            if (matchedLength > bestLength) {
-                matchedClass = rule;
-                bestLength = matchedLength;
-            }
-        }
-
-        if (bestLength > 0 && matchedClass !== null) {
-            elements.push(<span key={currentTokenIndex++} className={matchedClass}>{
-                input.substring(0, bestLength)
-            }</span>);
-            input = input.substring(bestLength);
-        } else {
-            const skippedChar = input.charAt(0);
-            const element = skippedChar.match(/^\s$/)
-                ? skippedChar
-                : <span key={currentTokenIndex++} className={'error-char'}>{skippedChar}</span>;
-            elements.push(element)
-            input = input.substring(1);
-        }
-    }
-
-    return <pre>{elements}<span style={{fontSize: 0, userSelect: 'none'}}>-</span></pre>;
+    return <pre>
+        {elements}
+        <span style={{ fontSize: 0, userSelect: 'none' }}>
+            {' '}
+        </span>
+    </pre>;
 }

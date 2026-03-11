@@ -20,15 +20,32 @@ export class State {
      */
     private mem: Uint8Array;
     /** A random offset to memory addresses */
-    private readonly memOffset: bigint;
+    readonly memOffset: bigint;
+    /** A random offset to the program counter */
+    readonly pcOffset: bigint;
     /** NZCV flags */
-    private flags: bigint;
+    private flags: bigint = 0n;
     /** Program counter */
     private programCounter: bigint = 0n;
     /** Total bytes of memory used */
     private memSize: bigint = 0n;
 
     constructor(dataBytes?: Uint8Array) {
+        this.registers = new BigUint64Array(32) as State.Registers;
+        this.mem = new Uint8Array;
+
+        // Generates a random value from 01000...000 to 010111...1110000
+        // aligned to 16 bytes for the memory offset
+        this.memOffset = (randUnsignedBigint(59) + (1n << 58n)) << 4n;
+
+        // Generate a random value from 000...000 to 000111...11100
+        // aligned to 4 bytes for the program counter offset
+        this.pcOffset = randUnsignedBigint(60) << 2n;
+
+        this.reset(dataBytes);
+    }
+
+    reset(dataBytes?: Uint8Array) {
         // Figure out how many extra bytes of memory we need to reserve at the 
         // beginning for data
         dataBytes ??= new Uint8Array;
@@ -38,9 +55,9 @@ export class State {
             : 0;
 
         // Generate random register values
-        this.registers = new BigUint64Array(32).map(
+        this.registers.set(new BigUint64Array(32).map(
             () => randUnsignedBigint(64)
-        ) as State.Registers;
+        ));
 
         // Start with a bunch of memory
         this.mem = new Uint8Array(65536 + numDataBytesPadded);
@@ -51,9 +68,7 @@ export class State {
             this.mem[numDataBytes - i - 1] = dataBytes[i];
         }
 
-        // Generates a random value from 01000...0000 to 010111...110000
-        // aligned to 16 bytes for the memory offset
-        this.memOffset = (randUnsignedBigint(59) + (1n << 58n)) << 4n;
+        this.programCounter = this.pcOffset;
         // Set stack pointer
         this.setRegister("SP", this.memOffset - BigInt(numDataBytesPadded));
 
@@ -158,8 +173,15 @@ export class State {
         return BigInt(this.programCounter);
     }
 
+    get currInstructionIndex(): number {
+        if(this.PC & 3n) {
+            throw new Error("Unaligned program counter");
+        }
+        return Number((this.PC - this.pcOffset) >> 2n);
+    }
+
     incPC() {
-        this.programCounter++;
+        this.programCounter += 4n;
     }
 
     branchPCrel(offset: bigint): void {

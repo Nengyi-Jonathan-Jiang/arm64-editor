@@ -59,7 +59,14 @@ export function className(x: object): string {
     return x.constructor.name;
 }
 
-export type FilterRecordValue<R extends Record<string | symbol, unknown>, V> =
-    keyof { [K in keyof R as (
+export type FilterRecordValue<R extends Record<string, unknown>, V> =
+    string & keyof { [K in keyof R as (
         R[K] extends V ? K : never
     )]: V }
+
+export function splitWhitespace(s: string): [string, string, string] {
+    const [, a, b, c] = s.match(/^(\s*)(|[^\s]|[^\s].*[^\s])(\s*)$/s) ?? [
+        null, "", "", ""
+    ];
+    return [a, b, c];
+}
