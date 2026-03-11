@@ -6,5 +6,6 @@ export default defineConfig({
     plugins: [react()],
     build: {
         minify: false,
-    }
+    },
+    base: "https://njonathanj.com/chArm-interpreter/"
 })
