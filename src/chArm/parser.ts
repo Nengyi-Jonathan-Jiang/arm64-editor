@@ -1,5 +1,5 @@
 import { ADD, ADDS, ANDS, ASR, B, BL, CMN, CMP, EOR, HLT, LDUR, LSL, LSR, MOVK, MOVZ, MVN, NOP, ORR, RET, STUR, SUB, SUBS, TST, UBFM, type Instruction } from "./instructions";
-import type { RegisterGP, State } from "./state";
+import type { RegisterGP } from "./state";
 import { getTokenContents, type ChARMToken, type opcode, type Token } from "./tokenizer";
 
 const instructionMap = {
@@ -12,7 +12,7 @@ const instructionMap = {
     nop: NOP, hlt: HLT
 } as const;
 
-export function assembleChARM(tokens: readonly ChARMToken[], state: State): [
+export function assembleChARM(tokens: readonly ChARMToken[]): [
     Instruction[], Map<number, string[]>?
 ] {
     const errors: Map<number, string[]> = new Map;

@@ -8,7 +8,6 @@ import { HorizontalResizableDoublePane } from './resizable/resizable'
 import { useListenerOnWindow, useManualRerender } from './util/hooks'
 import { tokenize } from './chArm/tokenizer'
 import { assembleChARM } from './chArm/parser'
-import { State } from './chArm/state'
 
 function HL({ children, color, ...attributes }: {
     children: ReactNode,
@@ -86,10 +85,8 @@ function App() {
     }, [code, funcName]);
 
     const tokenized = useMemo(() => tokenize(code), [code]);
-    const state = useMemo(() => new State, [tokenized]);
     const [instructions, errors] = useMemo(
-        () => assembleChARM(tokenized, state), 
-        [tokenized, state]
+        () => assembleChARM(tokenized), [tokenized]
     );
     (window as any)['instructions'] = instructions;
 
