@@ -2,7 +2,6 @@ import { useRef, type ReactNode } from "react";
 
 import "./codeEditor.css"
 import { clamp } from "../util/util";
-import { useListenerOnElement } from "../util/hooks";
 
 function getLinesRange(
     s: string, left: number, right: number
