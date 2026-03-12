@@ -144,16 +144,6 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     break;
                 }
 
-                case "tst": {
-                    const a = expectReg(rest);
-                    if (a === null) break;
-                    if (!expectPunct(rest, ",")) break;
-                    const b = expectReg(rest);
-                    if (b === null) break;
-                    res.push(new TST({ a, b }))
-                    break;
-                }
-
                 case "mvn": {
                     const dst = expectReg(rest);
                     if (dst === null) break;
@@ -164,12 +154,13 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     break;
                 }
 
+                case "cmn":
                 case "cmp":
-                case "cmn": {
+                case "tst": {
                     const a = expectReg(rest);
                     if (a === null) break;
                     if (!expectPunct(rest, ",")) break;
-                    const b = expectRegOrImm(rest);
+                    const b = expectReg(rest);
                     if (b === null) break;
                     res.push(new (instructionMap[opcode])({ a, b }))
                     break;

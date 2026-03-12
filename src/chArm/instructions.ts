@@ -183,7 +183,7 @@ export class STUR extends InstructionBase<{
     }
 }
 
-abstract class MOV extends InstructionBase<{
+abstract class MOV$ extends InstructionBase<{
     dst: RegisterGP; value: bigint; shift: bigint;
 }> {
     abstract readonly zero: boolean;
@@ -202,12 +202,12 @@ abstract class MOV extends InstructionBase<{
     }
 }
 
-export class MOVK extends MOV {
+export class MOVK extends MOV$ {
     readonly opcode = "MOVK";
     readonly zero = false;
 }
 
-export class MOVZ extends MOV {
+export class MOVZ extends MOV$ {
     readonly opcode = "MOVK";
     readonly zero = true;
 }
@@ -261,18 +261,16 @@ export class ADDS extends BinOpRR {
     }
 }
 
-export class CMN extends BinOpRX<"ZR"> {
+export class CMN extends BinOpRR<"ZR"> {
     readonly opcode = "CMN";
 
-    constructor({ a, b }: { a: RegisterGP, b: bigint | RegisterGP }) {
+    constructor({ a, b }: { a: RegisterGP, b: RegisterGP }) {
         super({ dst: "ZR", a, b });
     }
 
     protected checkOperands(): void {
         this.checkRegisterGP("a");
-        if (typeof this.operands.b === "bigint")
-            this.checkOperandRange("b" as never, 12);
-        else this.checkRegisterGP("b" as never);
+        this.checkRegisterGP("b" as never);
     }
     doOperation = ADDS.prototype.doOperation;
 }
@@ -312,18 +310,16 @@ export class SUBS extends BinOpRR {
     }
 }
 
-export class CMP extends BinOpRX<"ZR"> {
+export class CMP extends BinOpRR<"ZR"> {
     readonly opcode = "CMP";
 
-    constructor({ a, b }: { a: RegisterGP, b: bigint | RegisterGP }) {
+    constructor({ a, b }: { a: RegisterGP, b: RegisterGP }) {
         super({ dst: "ZR", a, b });
     }
 
     protected checkOperands(): void {
         this.checkRegisterGP("a");
-        if (typeof this.operands.b === "bigint")
-            this.checkOperandRange("b" as never, 12);
-        else this.checkRegisterGP("b" as never);
+        this.checkRegisterGP("b" as never);
     }
 
     doOperation = SUBS.prototype.doOperation;

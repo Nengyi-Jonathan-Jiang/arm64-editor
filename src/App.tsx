@@ -108,11 +108,10 @@ function App() {
                     <HL color="medium" children={","} />
                     <HL color="orange" children={" %function\n"} />
                     <FuncNameInput funcName={funcName} setFuncName={setFuncName} />
-                    <HL color="green" children={":\n"} onClick={
+                    <HL color="green" children={":"} onClick={
                         ({ currentTarget: { previousElementSibling: i } }) => {
                             (i as HTMLInputElement).focus()
                         }} />
-                    <HL color="medium" children="    // Function start"></HL>
                 </pre>
                 <CodeEditor
                     value={code}
@@ -126,7 +125,6 @@ function App() {
                         </HighlighterWithErrors>
                     }} />
                 <pre>
-                    <HL color="medium" children={"    // Function end \n"} />
                     <HL color="blue" children={"    .size    "} />
                     <HL color="green" children={`${funcName}`} />
                     <HL color="medium" children={", .-"} />
