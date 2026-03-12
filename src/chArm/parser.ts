@@ -118,7 +118,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     const value = expectImm(rest);
                     if (value === null) break;
                     let shift: bigint | null = 0n;
-                    if (expectPunct(rest, ",")) {
+                    if (expectPunct(rest, ",", false)) {
                         if (!expectPunct(rest, "LSL")) break;
                         shift = expectImm(rest);
                     }
@@ -301,12 +301,14 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
         }
     }
 
-    function expectPunct(rest: ChARMToken[], s: string): boolean {
+    function expectPunct(
+        rest: ChARMToken[], s: string, require: boolean = true
+    ): boolean {
         if (rest[0]?.type === "punct" && getTokenContents(rest[0]) === s) {
             rest.shift();
             return true;
         }
-        error(`Expected "${s}"`, ...rest);
+        if(require) error(`Expected "${s}"`, ...rest);
         return false;
     }
     function expectCond(rest: ChARMToken[]): B.cond | undefined {
