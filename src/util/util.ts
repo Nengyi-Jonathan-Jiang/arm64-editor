@@ -74,3 +74,19 @@ export function splitWhitespace(s: string): [string, string, string] {
 export function clamp(x: number, min: number, max: number) {
     return x < min ? min : x > max ? max : x;
 }
+
+type TypedArray =
+  | Int8Array
+  | Uint8Array
+  | Uint8ClampedArray
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array
+  | Float32Array
+  | Float64Array
+  | BigInt64Array
+  | BigUint64Array;
+export function cloneArray<T extends any[] | TypedArray>(arr: T): T {
+    return arr.map(i => i) as never;
+}

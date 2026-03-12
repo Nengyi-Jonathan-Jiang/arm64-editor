@@ -4,7 +4,7 @@ import './chArm/parser'
 import { CodeEditor } from './codeEditor/codeEditor'
 import { CodeHighlighter } from './codeEditor/codeHighlighter'
 import { HighlighterWithErrors } from './codeEditor/highlighterWithErrors'
-import { HorizontalResizableDoublePane } from './resizable/resizable'
+import { HorizontalResizableDoublePane, VerticalResizableDoublePane } from './resizable/resizable'
 import { useListenerOnWindow, useManualRerender } from './util/hooks'
 import { tokenize } from './chArm/tokenizer'
 import { assembleChARM } from './chArm/parser'
@@ -44,14 +44,18 @@ const FuncNameInput = ({
     />
 }
 
-const LineNumbers = memo(({ amount }: { amount: number }) => {
+const LineNumbers = memo((
+    { amount, current }: { amount: number, current?: number | undefined }
+) => {
     const len = amount.toString().length;
 
-    return <pre className="line-numbers">
+    return <pre className="line-numbers" style={{
+        "--current": current ?? "-infinity"
+    } as any}>
         {
             new Array(amount).fill(0)
                 .map((_, i) => i + 1)
-                .map(i => ` ${i.toString().padStart(len, ' ')} `)
+                .map(i => `  ${i.toString().padStart(len, ' ')} `)
                 .join('\n')
         }
     </pre>
@@ -85,7 +89,7 @@ function App() {
     }, [code, funcName]);
 
     const tokenized = useMemo(() => tokenize(code), [code]);
-    const [instructions, errors] = useMemo(
+    const [instructions, lineNumbers, errors] = useMemo(
         () => assembleChARM(tokenized), [tokenized]
     );
     (window as any)['instructions'] = instructions;
@@ -133,9 +137,11 @@ function App() {
             </div>
         </div>
     } right={
-        <div>
-            TODO: make the runner work
-        </div>
+        <VerticalResizableDoublePane top={
+            <div>Top</div>
+        } bottom={
+            <div>Bottom</div>
+        } />
     } />
 
 }

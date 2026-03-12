@@ -2,7 +2,8 @@ import {
     randUnsignedBigint,
     toHexString,
     type IntRange,
-    wrapUndef
+    wrapUndef,
+    cloneArray
 } from "../util/util";
 
 export type Register = RegisterGP | "SP" | "ZR";
@@ -30,19 +31,40 @@ export class State {
     /** Total bytes of memory used */
     private memSize: bigint = 0n;
 
-    constructor(dataBytes?: Uint8Array) {
-        this.registers = new BigUint64Array(32) as State.Registers;
-        this.mem = new Uint8Array;
+    protected constructor(state: State);
+    protected constructor(dataBytes?: Uint8Array);
+    protected constructor(arg?: Uint8Array | State) {
+        if (arg instanceof State) {
+            this.registers = cloneArray(arg.registers);
+            this.mem = cloneArray(arg.mem);
+            this.memOffset = arg.memOffset;
+            this.pcOffset = arg.pcOffset;
+            this.flags = arg.flags;
+            this.programCounter = arg.programCounter;
+            this.memSize = arg.programCounter;
+        }
+        else {
+            this.registers = new BigUint64Array(32) as State.Registers;
+            this.mem = new Uint8Array;
 
-        // Generates a random value from 01000...000 to 010111...1110000
-        // aligned to 16 bytes for the memory offset
-        this.memOffset = (randUnsignedBigint(59) + (1n << 58n)) << 4n;
+            // Generates a random value from 01000...000 to 010111...1110000
+            // aligned to 16 bytes for the memory offset
+            this.memOffset = (randUnsignedBigint(59) + (1n << 58n)) << 4n;
 
-        // Generate a random value from 000...000 to 000111...11100
-        // aligned to 4 bytes for the program counter offset
-        this.pcOffset = randUnsignedBigint(60) << 2n;
+            // Generate a random value from 000...000 to 000111...11100
+            // aligned to 4 bytes for the program counter offset
+            this.pcOffset = randUnsignedBigint(60) << 2n;
 
-        this.reset(dataBytes);
+            this.reset(arg);
+        }
+    }
+
+    new(dataBytes?: Uint8Array) {
+        return new State(dataBytes)
+    }
+
+    clone(): State {
+        return new State(this);
     }
 
     reset(dataBytes?: Uint8Array) {
@@ -127,7 +149,7 @@ export class State {
             throw e;
         }
 
-        if(startIndex + 8n > this.memSize) this.memSize = startIndex + 8n;
+        if (startIndex + 8n > this.memSize) this.memSize = startIndex + 8n;
 
         return new DataView(this.mem.buffer, Number(startIndex), 8);
     }
@@ -174,7 +196,7 @@ export class State {
     }
 
     get currInstructionIndex(): number {
-        if(this.PC & 3n) {
+        if (this.PC & 3n) {
             throw new Error("Unaligned program counter");
         }
         return Number((this.PC - this.pcOffset) >> 2n);
@@ -261,6 +283,7 @@ export class State {
         this.mem = newMemory;
     }
 }
+
 export class MemoryError extends Error {
     constructor(msg: string, ptr: bigint, startIndex: bigint, cause?: unknown) {
         super(

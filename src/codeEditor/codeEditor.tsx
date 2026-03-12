@@ -161,7 +161,6 @@ export function CodeEditor({ value, setValue, errors, placeholder, Highlighter }
                     i.setSelectionRange(
                         ...sortRange(shift ? oldStart : target, target)
                     );
-                    // Scroll to left
                     scrollParent.scrollLeft = 0;
                     fixScroll(i, "start");
                     return;
@@ -180,16 +179,24 @@ export function CodeEditor({ value, setValue, errors, placeholder, Highlighter }
                     i.setSelectionRange(
                         ...sortRange(shift ? oldStart : target, target)
                     );
-                    // Scroll to right
                     fixScroll(i, "end");
                     return;
                 }
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    const { left, right, s } = getLinesRange(
+                        i.value, i.selectionStart, i.selectionStart
+                    );
 
+                    e.preventDefault();
+                    document.execCommand("insertText", false, "\n");
                     // Smart indent
-                    // const { left, right, s } = getLinesRange(
-                    //     i.value, oldEnd, oldEnd
-                    // );
+
+                    // Double-check that the selection is now collapsed
+                    document.getSelection()?.collapseToEnd();
+
+                    const match = s.match(/^( +(?:\/\/ *)?)/)?.[0];
+
+                    if(match) document.execCommand("insertText", false, match);
                 }
                 // if(e.key === 'PageUp' || e.key === 'PageDown') {
                 //     p.scrollLeft = 0;

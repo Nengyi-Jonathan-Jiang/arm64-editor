@@ -13,7 +13,7 @@ const instructionMap = {
 } as const;
 
 export function assembleChARM(tokens: readonly ChARMToken[]): [
-    Instruction[], Map<number, string[]>?
+    Instruction[], number[], Map<number, string[]>?
 ] {
     const errors: Map<number, string[]> = new Map;
     let lineNumber: number = 0;
@@ -72,9 +72,11 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
     lines = lines.filter(i => i[0].type === "opcode");
 
     const res: Instruction[] = [];
+    const lineNumbers: number[] = [];
 
     for (const [firstToken, ...rest] of lines) {
         lineNumber = firstToken.lineNumber;
+        lineNumbers.push(lineNumber);
 
         // Parse instruction
         const opcode = getTokenContents(firstToken).toLowerCase() as opcode;
@@ -281,9 +283,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
         }
     }
 
-    return [res, ...(errors.size ? [errors] as const : [] as const)];
-
-
+    return [res, lineNumbers, ...(errors.size ? [errors] as const : [] as const)];
 
     function errorLine(message: string, line?: number) {
         line ??= lineNumber;

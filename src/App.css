@@ -36,6 +36,13 @@ body {
     height: fit-content
 }
 
+.line-numbers::before {
+    position: absolute;
+    top: calc(var(--current) * 18px);
+    content: "▶";
+    color: var(--color-green);
+}
+
 .line-numbers::after {
     border-left: 1px solid var(--color-medium);
     position: absolute;
