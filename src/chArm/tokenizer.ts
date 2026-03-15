@@ -1,79 +1,5 @@
-import { splitWhitespace } from "../util/util";
 import { B_condMap as conditions } from "./instructions";
-
-export type Token<type extends string = string> = {
-    readonly type: type,
-    readonly line: string,
-    readonly lineNumber: number,
-    readonly lineRange: readonly [number, number],
-    readonly originalRange: readonly [number, number],
-    isError?: boolean
-}
-
-export function getTokenContents(token: Token): string {
-    return token.line.substring(...token.lineRange);
-}
-export function getTokenLength(token: Token): number {
-    return token.lineRange[1] - token.lineRange[0];
-}
-
-function sliceToken<K extends string>(
-    token: Token<any>, type: K,
-    start: number, end: number
-): Token<K> {
-    if (start < 0
-        || token.lineRange[0] + end > token.lineRange[1]
-        || token.originalRange[0] + end > token.originalRange[1]
-        || start > end
-    ) {
-        throw new Error("Bad token slice");
-    }
-    return {
-        type,
-        line: token.line,
-        lineNumber: token.lineNumber,
-        lineRange: [
-            token.lineRange[0] + start, token.lineRange[0] + end
-        ],
-        originalRange: [
-            token.originalRange[0] + start, token.originalRange[0] + end
-        ]
-    };
-}
-function relabelToken<K extends string>(
-    token: Token<any>, type: K
-): Token<K> {
-    return { ...token, type }
-}
-function splitToken<K1 extends string, K2 extends string>(
-    token: Token<any>, type1: K1, type2: K2, pos: number
-): [Token<K1>, Token<K2>] {
-    return [
-        sliceToken(token, type1, 0, pos),
-        sliceToken(token, type2, pos, getTokenLength(token))
-    ]
-}
-function trimToken<K extends string>(token: Token<K>): Token<K> {
-    const [a, b] = splitWhitespace(getTokenContents(token));
-    return sliceToken(token, token.type, a.length, a.length + b.length);
-}
-function extractBeginning<K extends string, K1 extends string>(
-    tok: Token<K>, regex: RegExp, type: K1 | ((match: RegExpMatchArray) => K1)
-): [Token<K1>, Token<K>] | null {
-    const match = getTokenContents(tok).match(regex);
-    if (match === null) return null;
-
-    const pos1 = match.index!;
-    const pos2 = pos1 + match[0].length;
-
-    const token = sliceToken(
-        tok, typeof type === "function" ? type(match) : type,
-        pos1, pos2
-    );
-
-    const rest = sliceToken(tok, tok.type, pos2, getTokenLength(tok));
-    return [token, rest];
-}
+import { type Token, extractBeginning, getTokenLength, getTokenContents, splitToken, relabelToken, trimToken, sliceToken } from "../parsing/parsing";
 
 const opcodes = [
     "ldur", "stur", "movk", "movz",
@@ -98,7 +24,7 @@ export type ChARMToken = Token<
     "endl"
 >;
 
-const operandRegex = /([[\],]|LSL)|(\bX(?:[12]?\d|30)\b)|(\bSP\b)|(\bXZR\b)|(#-?(?:0x[\da-fA-F_]+|0b[10_]+|[\d_]+)\b)|(\.?\b\w+\b)/si;
+const operandRegex = /([[\],]|LSL)|(\bX(?:[12]?\d|30)\b)|(\bSP\b)|(\bXZR\b)|(#-?(?:0x[\da-fA-F_]+|0b[10_]+|[\d_]+)\b)|(\.?\b[a-z_]\w*\b)/si;
 function tokenizeInstructionOperands(tok: Token<"line">): ChARMToken[] {
     const result: ChARMToken[] = [];
     let match: [ChARMToken, Token<"line">] | null;
@@ -128,7 +54,7 @@ function tokenizeInstruction(tok: Token<"line">): ChARMToken[] {
     let [op] = getTokenContents(tok).split(/\s/, 1);
     const [opTok, rest] = splitToken(tok, "unknown", "line", op.length);
 
-    if (op.match(/^\.?\w+:$/)) {
+    if (op.match(/^\.?[a-zA-Z_]\w*:$/)) {
         return [relabelToken(opTok, "label")];
     }
 

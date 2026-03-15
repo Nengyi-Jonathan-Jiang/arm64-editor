@@ -141,8 +141,8 @@ function App() {
                 </div>
             </div>
         } bottom={
-            <div>
-                <InputsEditor/>
+            <div id="inputs-editor">
+                <InputsEditor setFunc={() => void 0}/>
             </div>
         } />
     } />

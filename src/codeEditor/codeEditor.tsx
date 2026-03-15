@@ -203,10 +203,6 @@ export function CodeEditor({ value, setValue, errors, placeholder, Highlighter }
 
                     if (match) document.execCommand("insertText", false, match);
                 }
-                // if(e.key === 'PageUp' || e.key === 'PageDown') {
-                //     p.scrollLeft = 0;
-                // }
-                // setTimeout(() => scrollProperly(i), 0);
             }}
         />
         <div className="code-overlay">

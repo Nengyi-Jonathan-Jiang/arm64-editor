@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { getTokenContents, type Token } from "../chArm/tokenizer";
+import { getTokenContents, type Token } from "../parsing/parsing";
 import { splitWhitespace } from "../util/util";
 
 function decorateIndented(s: string, isBlank: boolean, isStart: boolean, key: string): ReactNode[] {

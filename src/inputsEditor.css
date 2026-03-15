@@ -1,0 +1,27 @@
+#inputs-editor {
+    padding: 0.5em;
+}
+
+#inputs-editor span.comment {
+    color: var(--color-medium)
+}
+
+#inputs-editor span.label {
+    color: var(--color-green);
+}
+
+#inputs-editor span.error {
+    background: color-mix(var(--color-red) 20%, transparent);
+}
+
+#inputs-editor span.value {
+    color: var(--color-purple)
+}
+
+#inputs-editor span.reg {
+    color: var(--color-yellow)
+}
+
+#inputs-editor span:is(.regkwd,.size) {
+    color: var(--color-blue)
+}

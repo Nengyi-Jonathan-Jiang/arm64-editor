@@ -1,6 +1,7 @@
 import { ADD, ADDS, ANDS, ASR, B, BL, CMN, CMP, EOR, HLT, LDUR, LSL, LSR, MOVK, MOVZ, MVN, NOP, ORR, RET, STUR, SUB, SUBS, TST, UBFM, type Instruction } from "./instructions";
 import type { RegisterGP } from "./state";
-import { getTokenContents, type ChARMToken, type opcode, type Token } from "./tokenizer";
+import { type ChARMToken, type opcode } from "./tokenizer";
+import { getTokenContents, type Token } from "../parsing/parsing";
 
 const instructionMap = {
     ldur: LDUR, stur: STUR, movk: MOVK, movz: MOVZ,
