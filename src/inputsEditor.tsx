@@ -5,7 +5,7 @@ import type { Register, State } from "./chArm/state";
 import "./inputsEditor.css"
 
 export function InputsEditor(
-    { setFunc }: { setFunc: (f: (s: State) => any) => any }
+    { setFunc: _setFunc }: { setFunc: (f: (s: State) => any) => any }
 ): ReactNode {
     const [inputsCode, setInputsCode] = useState("");
 
@@ -24,7 +24,7 @@ export function InputsEditor(
     // type Action = never;
     // const labels: Map<string, (i: number) => void>
     // const actions: Action[];
-    const currOffset: bigint = 0n;
+    // const currOffset: bigint = 0n;
     for (let line of inputsCode.split(/(?<=\n)/g)) {
         if (line.match(/^ *\/\//)) {
             tokens.push({ type: "comment", s: line });
