@@ -476,7 +476,7 @@ export class UBFM extends InstructionBase<{
 
 export const B_condMap = [ // DO NOT CHANGE ORDER
     "eq", "ne", "cs", "hs", "cc", "lo", "mi", "pl", "vs",
-    "vc", "hi", "ls", "ge", "lt", "gt", "le", "al", "nv"
+    "vc", "hi", "ls", "ge", "lt", "gt", "le", "al"
 ] as const;
 
 
@@ -515,7 +515,10 @@ export class B extends InstructionBase<{ dst: bigint, cond: bigint }> {
 
     protected checkOperands(): void {
         this.checkOperandRange("dst", this.isUnconditional ? -26 : -19);
-        this.checkOperandRange("cond", 4);
+        this.checkOperand(
+            "cond",
+                x => B_condMap[Number(x)] !== undefined
+        );
     }
 
     applyTo({ dst, cond }: this["O"], state: State): void | boolean {

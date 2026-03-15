@@ -1,7 +1,33 @@
-import { ADD, ADDS, ANDS, ASR, B, BL, CMN, CMP, EOR, HLT, LDUR, LSL, LSR, MOVK, MOVZ, MVN, NOP, ORR, RET, STUR, SUB, SUBS, TST, UBFM, type Instruction } from "./instructions";
-import type { RegisterGP } from "./state";
-import { type ChARMToken, type opcode } from "./tokenizer";
-import { getTokenContents, type Token } from "../parsing/parsing";
+import {
+    ADD,
+    ADDS,
+    ANDS,
+    ASR,
+    B,
+    BL,
+    CMN,
+    CMP,
+    EOR,
+    HLT,
+    LDUR,
+    LSL,
+    LSR,
+    MOVK,
+    MOVZ,
+    MVN,
+    NOP,
+    ORR,
+    RET,
+    STUR,
+    SUB,
+    SUBS,
+    TST,
+    UBFM,
+    type Instruction
+} from "./instructions";
+import type {RegisterGP} from "./state";
+import {type ChARMToken, type opcode} from "./tokenizer";
+import {getTokenContents, type Token} from "../parsing/parsing";
 
 const instructionMap = {
     ldur: LDUR, stur: STUR, movk: MOVK, movz: MOVZ,
@@ -13,7 +39,7 @@ const instructionMap = {
     nop: NOP, hlt: HLT
 } as const;
 
-export function assembleChARM(tokens: readonly ChARMToken[]): [
+export function assembleChARM(tokens: readonly ChARMToken[], startLabel?: string): [
     Instruction[], number[], Map<number, string[]>?
 ] {
     const errors: Map<number, string[]> = new Map;
@@ -26,8 +52,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
 
         if (token.type === "endl") {
             lines.push([]);
-        }
-        else {
+        } else {
             lines[lines.length - 1].push(token);
         }
     }
@@ -37,6 +62,16 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
     let pc = 0n;
     const labelMap = new Map<string | Token<"opcode">, [bigint, ChARMToken[]]>;
 
+    if (startLabel !== undefined) {
+        labelMap.set(startLabel, [0n, [{
+            type: "label",
+            line: "",
+            lineNumber: -1,
+            lineRange: [0, 0],
+            originalRange: [0, 0]
+        }]]);
+    }
+
     for (const [firstToken, ...rest] of lines) {
         lineNumber = firstToken.lineNumber;
         switch (firstToken.type) {
@@ -44,24 +79,24 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                 labelMap.set(firstToken as Token<"opcode">, [pc, [firstToken]]);
                 pc += 4n;
                 break;
-            case "label":
+            case "label": {
                 let labelName = getTokenContents(firstToken);
                 labelName = labelName.substring(0, labelName.length - 1);
                 if (labelMap.has(labelName)) {
                     labelMap.get(labelName)![1].push(firstToken);
-                }
-                else {
+                } else {
                     labelMap.set(labelName, [pc, [firstToken]]);
                 }
                 error(null, ...rest);
                 break;
+            }
             default:
                 error('Malformed instruction', firstToken, ...rest);
         }
     }
 
     for (const [label, [, toks]] of labelMap) {
-        if (toks.length != 1) {
+        if (toks.length > 1) {
             error(
                 `Duplicate label "${label}" (lines ${toks.map(i => i.lineNumber + 7).join(', ')
                 })`,
@@ -96,7 +131,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     const offset = expectImm(rest);
                     if (offset === null) break;
                     if (!expectPunct(rest, "]")) break;
-                    res.push(new LDUR({ dst, src_b, offset }));
+                    res.push(new LDUR({dst, src_b, offset}));
                     break;
                 }
                 case "stur": {
@@ -110,7 +145,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     const offset = expectImm(rest);
                     if (offset === null) break;
                     if (!expectPunct(rest, "]")) break;
-                    res.push(new STUR({ dst_b, src, offset }));
+                    res.push(new STUR({dst_b, src, offset}));
                     break;
                 }
                 case "movk":
@@ -127,7 +162,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     }
                     if (shift === null) break;
 
-                    res.push(new (instructionMap[opcode])({ dst, value, shift }))
+                    res.push(new (instructionMap[opcode])({dst, value, shift}))
                     break;
                 }
                 case "adds":
@@ -143,7 +178,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     if (!expectPunct(rest, ",")) break;
                     const b = expectReg(rest);
                     if (b === null) break;
-                    res.push(new (instructionMap[opcode])({ dst, a, b }))
+                    res.push(new (instructionMap[opcode])({dst, a, b}))
                     break;
                 }
 
@@ -153,7 +188,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     if (!expectPunct(rest, ",")) break;
                     const a = expectReg(rest);
                     if (a === null) break;
-                    res.push(new MVN({ dst, a }))
+                    res.push(new MVN({dst, a}))
                     break;
                 }
 
@@ -165,7 +200,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     if (!expectPunct(rest, ",")) break;
                     const b = expectReg(rest);
                     if (b === null) break;
-                    res.push(new (instructionMap[opcode])({ a, b }))
+                    res.push(new (instructionMap[opcode])({a, b}))
                     break;
                 }
 
@@ -179,7 +214,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     if (!expectPunct(rest, ",")) break;
                     const b = expectRegOrImm(rest);
                     if (b === null) break;
-                    res.push(new (instructionMap[opcode])({ dst, a, b }))
+                    res.push(new (instructionMap[opcode])({dst, a, b}))
                     break;
                 }
 
@@ -194,7 +229,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     if (!expectPunct(rest, ",")) break;
                     const b = expectImm(rest);
                     if (b === null) break;
-                    res.push(new (instructionMap[opcode])({ dst, a, b }))
+                    res.push(new (instructionMap[opcode])({dst, a, b}))
                     break;
                 }
 
@@ -211,7 +246,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     const s = expectImm(rest);
                     if (s === null) break;
 
-                    res.push(new UBFM({ dst, a, r, s }));
+                    res.push(new UBFM({dst, a, r, s}));
                     break;
                 }
 
@@ -224,7 +259,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                         throw new Error(`Unknown label ${label}`);
                     }
                     const dst = pc[0];
-                    res.push(new B({ dst, cond }));
+                    res.push(new B({dst, cond}));
                     break;
                 }
 
@@ -236,7 +271,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                         throw new Error(`Unknown label ${label}`);
                     }
                     const dst = pc[0];
-                    res.push(new BL({ dst }));
+                    res.push(new BL({dst}));
                     break;
                 }
 
@@ -248,7 +283,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                             rest.shift()!
                         ).substring(1) as RegisterGP;
                     }
-                    res.push(new RET({ dst }));
+                    res.push(new RET({dst}));
                     break;
                 }
 
@@ -259,8 +294,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
                     res.push(new NOP({}));
                     break;
             }
-        }
-        catch (e) {
+        } catch (e) {
             errorLine(
                 (e as any)?.message ?? "Unknown error"
             );
@@ -292,6 +326,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
         const e = errors.get(line)!;
         if (!e.includes(message)) e.push(message);
     }
+
     function error(message: string | null, ...toks: ChARMToken[]) {
         for (const tok of toks) {
             tok.isError = true;
@@ -309,9 +344,10 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
             rest.shift();
             return true;
         }
-        if(require) error(`Expected "${s}"`, ...rest);
+        if (require) error(`Expected "${s}"`, ...rest);
         return false;
     }
+
     function expectCond(rest: ChARMToken[]): B.cond | undefined {
         if (rest[0]?.type === "condition") {
             return getTokenContents(rest.shift()!).substring(1) as B.cond;
@@ -319,6 +355,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
         // No error if not present
         return undefined;
     }
+
     function expectImm(rest: ChARMToken[]): bigint | null {
         if (rest[0]?.type === "imm") {
             const num = getTokenContents(rest.shift()!)
@@ -329,6 +366,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
         error('Expected immediate', ...rest);
         return null;
     }
+
     function expectLabel(rest: ChARMToken[]): string | null {
         if (rest[0]?.type === "label") {
             return getTokenContents(rest.shift()!)
@@ -336,6 +374,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
         error('Expected label', ...rest);
         return null;
     }
+
     function expectReg(rest: ChARMToken[]): RegisterGP | null {
         if (rest[0]?.type === "registerGP") {
             return +getTokenContents(
@@ -351,6 +390,7 @@ export function assembleChARM(tokens: readonly ChARMToken[]): [
         error('Expected register', ...rest);
         return null;
     }
+
     function expectRegOrImm(rest: ChARMToken[]): RegisterGP | bigint | null {
         if (rest[0]?.type === "imm") {
             const num = getTokenContents(rest.shift()!)
