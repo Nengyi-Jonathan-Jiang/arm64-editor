@@ -12,7 +12,7 @@ body {
 }
 
 ::selection {
-    background-color: var(--color-darker);
+    background-color: var(--color-medium-2);
 }
 
 #root {
@@ -91,9 +91,9 @@ span.tab-line {
     height:           18px;
     margin-bottom:    -4.5px;
     transform-origin: left;
-    transform:        scaleX(0.1);
-    background-color: var(--color-darker);
-    mix-blend-mode:   lighten;
+    transform:        scaleX(0.08);
+    background-color: var(--color-medium-2);
+    mix-blend-mode:   var(--blend-mode-2);
 }
 
 .code-highlighter-container .error {
