@@ -6,7 +6,7 @@
     color: var(--color-medium)
 }
 
-#inputs-editor span.label {
+#inputs-editor span:is(.labelRef,.labelDec) {
     color: var(--color-green);
 }
 

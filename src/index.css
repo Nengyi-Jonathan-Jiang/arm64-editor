@@ -11,13 +11,23 @@
     --color-green: #a9dc76;
     --color-blue: #78dce8;
     --color-purple: #ab9df2;
+    /*--color-red: #f48;*/
+    /*--color-orange: #f84;*/
+    /*--color-yellow: #fd4;*/
+    /*--color-green: #bd6;*/
+    /*--color-blue: #4bf;*/
+    /*--color-purple: #a8f;*/
     --color-darkest: #19181a;
     --color-dark: #2d2a2e;
     --color-darker: #4F4D50;
     --color-medium: #939293;
     --color-light: #fffffd;
-    color: var(--color-light);
-    background: var(--color-dark);
+
+    --color-fg: var(--color-light);
+    --color-bg: var(--color-dark);
+
+    color: var(--color-fg);
+    background: var(--color-bg);
 
     font-family: system, Avenir, Helvetica, Arial, sans-serif;
     line-height: 1.5;
@@ -35,8 +45,8 @@
     color: inherit;
     background: transparent;
     outline: none;
-    border:  none;
-    margin:  0;
+    border: none;
+    margin: 0;
     padding: 0;
 }
 

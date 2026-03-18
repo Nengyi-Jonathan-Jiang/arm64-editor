@@ -1,35 +1,35 @@
-import { memo, useEffect, useMemo, useState, type HTMLAttributes, type ReactNode } from 'react'
+import {memo, useEffect, useMemo, useState, type HTMLAttributes, type ReactNode} from 'react'
 import './App.css'
 import './chArm/parser'
-import { CodeEditor } from './codeEditor/codeEditor'
-import { CodeHighlighter } from './codeEditor/codeHighlighter'
-import { HighlighterWithErrors } from './codeEditor/highlighterWithErrors'
-import { HorizontalResizableDoublePane, VerticalResizableDoublePane } from './resizable/resizable'
-import { useListenerOnWindow, useManualRerender } from './util/hooks'
-import { tokenize } from './chArm/tokenizer'
-import { assembleChARM } from './chArm/parser'
-import { InputsEditor } from './inputsEditor'
+import {CodeEditor} from './codeEditor/codeEditor'
+import {CodeHighlighter} from './codeEditor/codeHighlighter'
+import {HighlighterWithErrors} from './codeEditor/highlighterWithErrors'
+import {HorizontalResizableDoublePane, VerticalResizableDoublePane} from './resizable/resizable'
+import {useListenerOnWindow, useManualRerender} from './util/hooks'
+import {tokenize} from './chArm/tokenizer'
+import {assembleChARM} from './chArm/parser'
+import {InputsEditor} from './inputsEditor'
 
-function HL({ children, color, ...attributes }: {
+function HL({children, color, ...attributes}: {
     children: ReactNode,
     color: "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "medium",
 } & Partial<HTMLAttributes<HTMLSpanElement>>): ReactNode {
-    return <span style={{ color: `var(--color-${color})` }} {...attributes}>
+    return <span style={{color: `var(--color-${color})`}} {...attributes}>
         {children}
     </span>
 }
 
 const FuncNameInput = ({
-    funcName,
-    setFuncName
-}: { funcName: string, setFuncName: (name: string) => any }) => {
+                           funcName,
+                           setFuncName
+                       }: { funcName: string, setFuncName: (name: string) => any }) => {
     const [value, setValue] = useState(funcName);
     return <input
         id="function-name"
         placeholder={funcName}
         value={value}
         onKeyDown={e => {
-            const { key } = e;
+            const {key} = e;
             if (!key.match(/^\w+$/)) { // Function name must be only word chars
                 e.preventDefault();
             }
@@ -45,7 +45,7 @@ const FuncNameInput = ({
     />
 }
 
-const LineNumbers = memo(({ amount }: { amount: number }) => {
+const LineNumbers = memo(({amount}: { amount: number }) => {
     const len = amount.toString().length;
 
     return <pre id="line-numbers">
@@ -93,26 +93,30 @@ function App() {
 
     return <HorizontalResizableDoublePane left={
         <div id="asm-editor-outer">
-            <LineNumbers amount={code.split('\n').length + 8} />
+            <LineNumbers amount={code.split('\n').length + 6}/>
             <div id="asm-editor">
                 <pre>
-                    <HL color="blue" children={"    .align   "} />
-                    <HL color="purple" children={"2\n"} />
-                    <HL color="blue" children={"    .p2align "} />
-                    <HL color="purple" children={"3"} />
-                    <HL color="medium" children={",,"} />
-                    <HL color="purple" children={"7\n"} />
-                    <HL color="blue" children={"    .global  "} />
-                    <HL color="green" children={`${funcName}\n`} />
-                    <HL color="blue" children={"    .type    "} />
-                    <HL color="green" children={`${funcName}`} />
-                    <HL color="medium" children={","} />
-                    <HL color="orange" children={" %function\n"} />
-                    <FuncNameInput funcName={funcName} setFuncName={setFuncName} />
+                    <span className='tab-line'/>
+                    <HL color="blue" children={"    .align   "}/>
+                    <HL color="purple" children={"2\n"}/>
+                    <span className='tab-line'/>
+                    <HL color="blue" children={"    .p2align "}/>
+                    <HL color="purple" children={"3"}/>
+                    <HL color="medium" children={",,"}/>
+                    <HL color="purple" children={"7\n"}/>
+                    <span className='tab-line'/>
+                    <HL color="blue" children={"    .global  "}/>
+                    <HL color="green" children={`${funcName}\n`}/>
+                    <span className='tab-line'/>
+                    <HL color="blue" children={"    .type    "}/>
+                    <HL color="green" children={`${funcName}`}/>
+                    <HL color="medium" children={","}/>
+                    <HL color="orange" children={" %function\n"}/>
+                    <FuncNameInput funcName={funcName} setFuncName={setFuncName}/>
                     <HL color="green" children={":"} onClick={
-                        ({ currentTarget: { previousElementSibling: i } }) => {
+                        ({currentTarget: {previousElementSibling: i}}) => {
                             (i as HTMLInputElement).focus()
-                        }} />
+                        }}/>
                 </pre>
                 <CodeEditor
                     value={code}
@@ -120,16 +124,17 @@ function App() {
                         setCode(code);
                     }}
                     errors={errors}
-                    Highlighter={({ value, errors }) => {
+                    Highlighter={({value, errors}) => {
                         return <HighlighterWithErrors errors={errors}>
-                            <CodeHighlighter value={value} tokens={tokenized} />
+                            <CodeHighlighter value={value} tokens={tokenized}/>
                         </HighlighterWithErrors>
-                    }} />
+                    }}/>
                 <pre>
-                    <HL color="blue" children={"    .size    "} />
-                    <HL color="green" children={`${funcName}`} />
-                    <HL color="medium" children={", .-"} />
-                    <HL color="green" children={`${funcName}`} />
+                    <span className='tab-line'/>
+                    <HL color="blue" children={"    .size    "}/>
+                    <HL color="green" children={`${funcName}`}/>
+                    <HL color="medium" children={", .-"}/>
+                    <HL color="green" children={`${funcName}`}/>
                 </pre>
             </div>
         </div>
@@ -137,15 +142,15 @@ function App() {
         <VerticalResizableDoublePane top={
             <div>
                 <div id="run-controls">
-                    
+
                 </div>
             </div>
         } bottom={
             <div id="inputs-editor">
                 <InputsEditor setFunc={() => void 0}/>
             </div>
-        } />
-    } />
+        }/>
+    }/>
 
 }
 

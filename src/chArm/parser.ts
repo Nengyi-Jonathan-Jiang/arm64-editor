@@ -308,16 +308,6 @@ export function assembleChARM(tokens: readonly ChARMToken[], startLabel?: string
         error(null, ...rest);
     }
 
-    for (const [label, [, toks]] of labelMap) {
-        if (toks.length != 1) {
-            error(
-                `Duplicate label "${label}" (lines ${toks.map(i => i.lineNumber + 7).join(', ')
-                })`,
-                ...toks
-            );
-        }
-    }
-
     return [res, lineNumbers, ...(errors.size ? [errors] as const : [] as const)];
 
     function errorLine(message: string, line?: number) {

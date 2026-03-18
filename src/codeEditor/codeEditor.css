@@ -10,12 +10,11 @@ div.code-editor:first-child:last-child {
 }
 
 div.code-overlay {
-    white-space: pre;
-    width:       100%;
-    height:      fit-content;
-    user-select: none;
+    white-space:    pre;
+    width:          100%;
+    height:         fit-content;
+    user-select:    none;
     pointer-events: none;
-    /* overflow: hidden; */
 }
 
 textarea.code-input {
@@ -33,7 +32,7 @@ textarea.code-input {
     resize:      none;
 
     color:       transparent;
-    caret-color: var(--color-light);
+    caret-color: var(--color-fg);
     background:  transparent;
 }
 
