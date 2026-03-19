@@ -93,7 +93,7 @@ function App () {
     const tokenized = useMemo(
         () => tokenize(code), [ code ]);
     const [ instructions, _lineNumbers, errors ] = useMemo(
-        () => assembleChARM(tokenized, funcName), [ tokenized ],
+        () => assembleChARM(tokenized, funcName), [ tokenized, funcName ],
     );
     (window as any)['instructions'] = instructions;
 
