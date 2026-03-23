@@ -7,5 +7,5 @@ export default defineConfig({
     build: {
         minify: false,
     },
-    base: "https://njonathanj.com/chArm-interpreter/"
+    base: "https://njonathanj.com/arm64-editor/"
 })
