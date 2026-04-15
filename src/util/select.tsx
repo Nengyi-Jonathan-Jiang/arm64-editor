@@ -21,7 +21,7 @@ function BasicSelectOptionComponent<OptionValueType>
         ref={ elementRef } { ...otherProps }>{ value?.toString() }</span>;
 }
 
-const selectOptionsStyle: CSSProperties       = {
+const selectOptionsStyle: CSSProperties = {
     display:       "flex",
     flexDirection: "column",
     width:         "fit-content",
@@ -33,7 +33,7 @@ const selectOptionsClosedStyle: CSSProperties = {
     height:        0,
     overflowY:     "hidden",
 };
-const selectOptionsOpenStyle: CSSProperties   = {
+const selectOptionsOpenStyle: CSSProperties = {
     height:    0,
     overflowY: "visible",
 };
@@ -70,12 +70,12 @@ export function Select<OptionValueType, ActiveOptionRefType extends HTMLElement,
         (x) => disabled ? [ false, (_: boolean) => void 0 ] : x
     )(useState(false));
 
-    const close      = () => setIsOpen(false);
+    const close = () => setIsOpen(false);
     const toggleOpen = () => setIsOpen(!isOpen);
 
-    const containerRef    = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const activeOptionRef = useRef<ActiveOptionRefType>(null);
-    const optionRefs      = useRefs<OptionRefType>(options.length);
+    const optionRefs = useRefs<OptionRefType>(options.length);
 
     useEffect(() => {
         optionRefs.forEach(({ current }, i) => {

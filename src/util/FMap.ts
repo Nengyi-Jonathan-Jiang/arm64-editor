@@ -3,7 +3,7 @@ export class FMap<K, V> implements Map<K, V> {
     private readonly _f: (key: K) => any;
 
     constructor (func: (key: K) => any, entries: Iterable<[ K, V ]> = []) {
-        this._f   = func;
+        this._f = func;
         this._map = new Map(
             [ ...entries ].map(([ k, v ]) => [ func(k), [ k, v ] ]),
         );
@@ -66,7 +66,7 @@ export class FSet<V> implements Set<V> {
     private readonly _f: (value: V) => any;
 
     constructor (func: (value: V) => any, entries: Iterable<V> = []) {
-        this._f   = func;
+        this._f = func;
         this._map = new Map(
             [ ...entries ].map((V) => [ func(V), V ]),
         );

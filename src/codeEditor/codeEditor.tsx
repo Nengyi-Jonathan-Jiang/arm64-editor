@@ -36,7 +36,7 @@ function fixScroll (
               selectionDirection: direction,
           } = i;
 
-    const oldEnd       = direction === "backward" ? oldLeft : oldRight;
+    const oldEnd = direction === "backward" ? oldLeft : oldRight;
     const scrollParent = i.parentElement!.parentElement!;
 
     if (mode === "auto") {
@@ -97,22 +97,22 @@ export function CodeEditor ({
                       const {
                                 currentTarget: i,
                                 key,
-                                shiftKey:      shift,
-                                ctrlKey:       ctrl,
-                            }            = e;
+                                shiftKey: shift,
+                                ctrlKey:  ctrl,
+                            } = e;
                       const {
                                 selectionStart:     oldLeft,
                                 selectionEnd:       oldRight,
                                 selectionDirection: direction,
                                 value,
-                            }            = i;
+                            } = i;
                       const wasCollapsed = oldLeft === oldRight;
-                      const oldStart     = direction === "backward"
-                                           ? oldRight
-                                           : oldLeft;
-                      const oldEnd       = direction === "backward"
-                                           ? oldLeft
-                                           : oldRight;
+                      const oldStart = direction === "backward"
+                                       ? oldRight
+                                       : oldLeft;
+                      const oldEnd = direction === "backward"
+                                     ? oldLeft
+                                     : oldRight;
 
                       const scrollParent = i.parentElement!.parentElement!;
 
@@ -159,11 +159,11 @@ export function CodeEditor ({
                               .split('\n')
                               .map(i => !!i.match(/^ *\/\//)),
                           );
-                          const doUncomment     = commentedStates.size == 2
-                                                  ? shift // If mixed,
-                                                          // disambiguate by
-                                                          // shift key
-                                                  : [ ...commentedStates ][0];
+                          const doUncomment = commentedStates.size == 2
+                                              ? shift // If mixed,
+                                                      // disambiguate by
+                                                      // shift key
+                                              : [ ...commentedStates ][0];
 
                           i.setSelectionRange(left, right);
                           const replacement = doUncomment ?
@@ -215,7 +215,7 @@ export function CodeEditor ({
                           return;
                       }
                       if (e.key === 'Enter' && !e.shiftKey) {
-                          const { left, s }        = getLinesRange(
+                          const { left, s } = getLinesRange(
                               i.value, i.selectionStart, i.selectionStart,
                           );
                           const trailingWhitespace = s.substring(
@@ -229,7 +229,7 @@ export function CodeEditor ({
 
                           // Double-check that the selection is now collapsed
                           i.selectionStart = oldStart + 1;
-                          i.selectionEnd   = oldStart + 1 + trailingWhitespace;
+                          i.selectionEnd = oldStart + 1 + trailingWhitespace;
 
                           const match = s.match(/^( +(?:\/\/ *)?)/)?.[0];
 

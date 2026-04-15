@@ -8,14 +8,14 @@ function decorateIndented (
 
     if (!isStart && nl === -1) return [ s ];
     const before = s.substring(0, nl + 1);
-    const rest   = s.substring(nl + 1);
+    const rest = s.substring(nl + 1);
 
     const spaceAmount = rest.match(/^ */)?.[0]?.length ?? 0;
 
     const tabsAmount = (spaceAmount - +!isBlank) & ~3;
 
     const res: ReactNode[] = [ before ];
-    let remainingSpace     = tabsAmount;
+    let remainingSpace = tabsAmount;
     if (remainingSpace >= 0) {
         res.push(<span className="tab-line"
                        key={ key + "|" + remainingSpace }/>);

@@ -21,7 +21,7 @@ export function assembleChARM (
     Instruction[], number[], Map<number, string[]>?
 ] {
     const errors: Map<number, string[]> = new Map;
-    let lineNumber: number              = 0;
+    let lineNumber: number = 0;
 
     // Split into lines
     let lines: ChARMToken[][] = [ [] ];
@@ -38,7 +38,7 @@ export function assembleChARM (
     // Remove empty lines
     lines = lines.filter(i => i.length !== 0);
 
-    let pc         = 0n;
+    let pc = 0n;
     const labelMap = new Map<string | Token<"opcode">, [ bigint, ChARMToken[] ]>;
 
     if (startLabel !== undefined) {
@@ -65,7 +65,7 @@ export function assembleChARM (
                 break;
             case "label": {
                 let labelName = getTokenContents(firstToken);
-                labelName     = labelName.substring(0, labelName.length - 1);
+                labelName = labelName.substring(0, labelName.length - 1);
                 if (labelMap.has(labelName)) {
                     labelMap.get(labelName)![1].push(firstToken);
                 }
@@ -93,7 +93,7 @@ export function assembleChARM (
 
     lines = lines.filter(i => i[0].type === "opcode");
 
-    const res: Instruction[]    = [];
+    const res: Instruction[] = [];
     const lineNumbers: number[] = [];
 
     for (const [ firstToken, ...rest ] of lines) {
@@ -101,9 +101,9 @@ export function assembleChARM (
         lineNumbers.push(lineNumber);
 
         // Parse instruction
-        const opcode       = getTokenContents(firstToken)
+        const opcode = getTokenContents(firstToken)
             .toLowerCase() as opcode;
-        const oldLen       = res.length;
+        const oldLen = res.length;
         const oldNumErrors = errors.get(lineNumber)?.length ?? 0;
         try {
             switch (opcode) {
@@ -239,7 +239,7 @@ export function assembleChARM (
                 }
 
                 case "b": {
-                    const cond  = expectCond(rest);
+                    const cond = expectCond(rest);
                     const label = expectLabel(rest);
                     if (!label) break;
                     const pc = labelMap.get(label);

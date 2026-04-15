@@ -12,38 +12,39 @@ export type RegisterGP = IntRange<31>;
 export class State {
     /** Should always be accessed in a big-endian way */
     private readonly registers: State.Registers;
+    /** A random offset to memory addresses */
+    readonly memOffset: bigint;
+    /** A random offset to the program counter */
+    readonly pcOffset: bigint;
+
     /**
      * Represents the contents of memory, backward. Thus, endianness should be
      * flipped (little-endian read/writes correspond to big-endian read/writes
      * and vice versa)
      */
     private mem: Uint8Array;
-    /** A random offset to memory addresses */
-    readonly memOffset: bigint;
-    /** A random offset to the program counter */
-    readonly pcOffset: bigint;
     /** N/Z/C/V flags */
-    private flags: bigint          = 0n;
+    private flags: bigint = 0n;
     /** Program counter */
     private programCounter: bigint = 0n;
     /** Total bytes of memory used */
-    private memSize: bigint        = 0n;
+    private memSize: bigint = 0n;
 
     protected constructor (state: State);
     protected constructor (dataBytes?: Uint8Array);
     protected constructor (arg?: Uint8Array | State) {
         if (arg instanceof State) {
-            this.registers      = cloneArray(arg.registers);
-            this.mem            = cloneArray(arg.mem);
-            this.memOffset      = arg.memOffset;
-            this.pcOffset       = arg.pcOffset;
-            this.flags          = arg.flags;
+            this.registers = cloneArray(arg.registers);
+            this.mem = cloneArray(arg.mem);
+            this.memOffset = arg.memOffset;
+            this.pcOffset = arg.pcOffset;
+            this.flags = arg.flags;
             this.programCounter = arg.programCounter;
-            this.memSize        = arg.programCounter;
+            this.memSize = arg.programCounter;
         }
         else {
             this.registers = new BigUint64Array(32) as State.Registers;
-            this.mem       = new Uint8Array;
+            this.mem = new Uint8Array;
 
             // Generates a random value from 01000...000 to 010111...1110000
             // aligned to 16 bytes for the memory offset
@@ -57,7 +58,7 @@ export class State {
         }
     }
 
-    new (dataBytes?: Uint8Array) {
+    static new (dataBytes?: Uint8Array) {
         return new State(dataBytes);
     }
 
@@ -69,19 +70,22 @@ export class State {
         // Figure out how many extra bytes of memory we need to reserve at the 
         // beginning for data
         dataBytes ??= new Uint8Array;
-        const numDataBytes       = dataBytes.length;
+        const numDataBytes = dataBytes.length;
         const numDataBytesPadded = numDataBytes
-                                   ? numDataBytes + (Number(
+            ? numDataBytes + (Number(
             randUnsignedBigint(4)) << 4)
-                                   : 0;
+            : 0;
 
         // Generate random register values
         this.registers.set(new BigUint64Array(32).map(
             () => randUnsignedBigint(64),
         ));
+        // Except for the link register and frame pointer
+        this.setRegister(29, 0n);
+        this.setRegister(30, 0n);
 
         // Start with a bunch of memory
-        this.mem     = new Uint8Array(65536 + numDataBytesPadded);
+        this.mem = new Uint8Array(65536 + numDataBytesPadded);
         this.memSize = BigInt(dataBytes.length);
         // Remember that mem is reversed, so we need to put dataBytes in
         // reverse  order
@@ -219,7 +223,8 @@ export class State {
         this.programCounter = addr;
     }
 
-    printRegisters (binary: boolean = false, ...registers: Register[]) {
+    DEBUG_registersAsStr (binary: boolean = false, ...registers: Register[])
+        : string {
         if (registers.length === 0) {
             registers = [
                 "SP",
@@ -227,7 +232,7 @@ export class State {
             ];
         }
 
-        console.log(registers
+        return registers
             .map(i => [ i, this.getRegister(i) ] as const)
             .map(([ n, i ]) => `${ (
                     n.toString().padStart(2)
@@ -240,34 +245,42 @@ export class State {
                 ) }` + (
                     binary ? ` = 0b ${ i.toString(2).padStart(64, '0') }` : ''
                 ),
-            ).join('\n'),
-        );
+            ).join('\n');
+    }
+
+    printRegisters (binary: boolean = false, ...registers: Register[]) {
+        console.log(this.DEBUG_registersAsStr(binary, ...registers));
+    }
+
+    DEBUG_memoryAsStr (view?: DataView): string {
+        view ??= new DataView(this.mem.buffer);
+        const bytes = [
+            ...new Uint8Array(
+                view.buffer,
+                view.byteOffset,
+                Math.min(view.byteLength, Number(this.memSize)),
+            ),
+        ];
+        bytes.push(...new Array(((-bytes.length) & 0xf)).fill(0));
+
+        return bytes.length == 0
+            ? 'Memory: \n[empty]'
+            : `Memory (starting at 0x${ toHexString(
+                this.memOffset, 8) } - ${ (
+                bytes.length
+            ) }):\n...${ bytes.toReversed().map((b, i) => {
+                return (i & 0xf ? ' ' : '\n') + toHexString(b, 1);
+            }).join('') }\n...`;
     }
 
     printMemory (): void;
     printMemory (register: Register, offset: bigint): void;
     printMemory (register?: Register, offset?: bigint) {
-        const view  = register === undefined
-                      ? new DataView(this.mem.buffer)
-                      : this.rawMemory(register, offset!);
-        const bytes = [
-            ...new Uint8Array(
-                view.buffer,
-                view.byteOffset,
-                Number(this.memSize),
-            ),
-        ];
-        bytes.push(...new Array(((-bytes.length) & 0xf)).fill(0));
+        const view = register === undefined
+            ? new DataView(this.mem.buffer)
+            : this.rawMemory(register, offset!);
 
-        console.log(bytes.length == 0
-                    ? 'Memory: \n[empty]'
-                    : `Memory (starting at 0x${ toHexString(
-                this.memOffset, 8) } - ${ (
-                bytes.length
-            ) }):\n...${ bytes.toReversed().map((b, i) => {
-                return (i & 0xf ? ' ' : '\n') + toHexString(b, 1);
-            }).join('') }\n...`,
-        );
+        console.log(this.DEBUG_memoryAsStr(view));
     }
 
     private ensureHasMemory (requiredSize: bigint) {

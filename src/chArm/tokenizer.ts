@@ -55,7 +55,7 @@ function tokenizeInstructionOperands (tok: Token<"line">): ChARMToken[] {
 function tokenizeInstruction (tok: Token<"line">): ChARMToken[] {
     if (getTokenLength(tok) === 0) return [];
 
-    let [ op ]            = getTokenContents(tok).split(/\s/, 1);
+    let [ op ] = getTokenContents(tok).split(/\s/, 1);
     const [ opTok, rest ] = splitToken(tok, "unknown", "line", op.length);
 
     if (op.match(/^\.?[a-zA-Z_]\w*:$/)) {
@@ -103,7 +103,7 @@ export function tokenize (src: string): readonly ChARMToken[] {
         const { line } = tok;
 
         if (line.indexOf("//") != -1) {
-            const i                      = line.indexOf("//");
+            const i = line.indexOf("//");
             const [ rest, commentToken ] = splitToken(
                 tok, "line", "comment", i);
 

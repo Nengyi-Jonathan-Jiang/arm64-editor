@@ -79,9 +79,9 @@ export function useListenerOnElement<K extends keyof HTMLElementEventMap> (
         const el: HTMLElement | null = element instanceof HTMLElement
                                        ? element
                                        : element.current;
-        const listenerTypes          = Array.isArray(listenerType)
-                                       ? listenerType
-                                       : [ listenerType ];
+        const listenerTypes = Array.isArray(listenerType)
+                              ? listenerType
+                              : [ listenerType ];
         if (el) {
             // Remove existing instances of listener if they exist
             for (const listenerType of listenerTypes) {
@@ -111,9 +111,9 @@ export function useOnResize (
     const [ observer ] = useState(new ResizeObserver(() => {
         callback();
     }));
-    const _element     = element instanceof HTMLElement
-                         ? element
-                         : element.current;
+    const _element = element instanceof HTMLElement
+                     ? element
+                     : element.current;
     useEffect(() => {
         if (_element) {
             observer.observe(_element);
@@ -171,7 +171,7 @@ export function useIntersectionObserver (options?: {
 
 
 let isCurrentlyAnimating = false;
-let animations           = new Set<(t: DOMHighResTimeStamp) => any>;
+let animations = new Set<(t: DOMHighResTimeStamp) => any>;
 
 function startAnimatingIfNotAnimating () {
     if (isCurrentlyAnimating) return;

@@ -2,20 +2,20 @@ import { type ReactNode, useMemo, useRef, useState } from "react";
 import { useListenerOnWindow } from "../util/hooks";
 import './resizable.css';
 
-export function HorizontalResizableDoublePane (
+export function HorizontalPanels (
     { left, right }: { left: ReactNode, right: ReactNode },
 ): ReactNode {
-    const isResizerActive                           = useRef(false);
-    const containerRef                              = useRef<HTMLDivElement>(
+    const isResizerActive = useRef(false);
+    const containerRef = useRef<HTMLDivElement>(
         null);
     let [ resizerPercentage, setResizerPercentage ] = useState(50);
-    resizerPercentage                               = Math.min(
+    resizerPercentage = Math.min(
         Math.max(resizerPercentage, 0), 100);
 
     const setResizerActive = useMemo(
         () => (active: boolean) => isResizerActive.current = active, [],
     );
-    const dragResizer      = useMemo(() => (clientX: number) => {
+    const dragResizer = useMemo(() => (clientX: number) => {
         if (isResizerActive.current && containerRef.current) {
             const boundingRect = containerRef.current.getBoundingClientRect();
             setResizerPercentage(
@@ -60,20 +60,20 @@ export function HorizontalResizableDoublePane (
     </div>;
 }
 
-export function VerticalResizableDoublePane (
+export function VerticalPanels (
     { top, bottom }: { top: ReactNode, bottom: ReactNode },
 ): ReactNode {
-    const isResizerActive                           = useRef(false);
-    const containerRef                              = useRef<HTMLDivElement>(
+    const isResizerActive = useRef(false);
+    const containerRef = useRef<HTMLDivElement>(
         null);
     let [ resizerPercentage, setResizerPercentage ] = useState(50);
-    resizerPercentage                               = Math.min(
+    resizerPercentage = Math.min(
         Math.max(resizerPercentage, 0), 100);
 
     const setResizerActive = useMemo(
         () => (active: boolean) => isResizerActive.current = active, [],
     );
-    const dragResizer      = useMemo(() => (clientY: number) => {
+    const dragResizer = useMemo(() => (clientY: number) => {
         if (isResizerActive.current && containerRef.current) {
             const boundingRect = containerRef.current.getBoundingClientRect();
             setResizerPercentage(

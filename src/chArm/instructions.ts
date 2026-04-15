@@ -35,7 +35,14 @@ abstract class InstructionBase<
      * Run the given instruction. If this returns true, do not increment the
      * instruction pointer
      */
-    abstract applyTo (operands: this["O"], state: State): void | boolean;
+    protected abstract applyTo (operands: this["O"], state: State)
+        : void | boolean;
+
+    public apply (state: State): void {
+        if (!this.applyTo(this.operands, state)) {
+            state.incPC();
+        }
+    }
 
     /** Check the validity of the arguments. This should be overridden */
     protected abstract checkOperands (): void;
@@ -96,8 +103,8 @@ abstract class InstructionBase<
         this.checkCondition(
             n,
             B < 0n
-            ? n >= -(1n << ~B) && n < (1n << ~B)
-            : n >= 0n && n < (1n << B),
+                ? n >= -(1n << ~B) && n < (1n << ~B)
+                : n >= 0n && n < (1n << B),
             `${ b < 0 ? 's' : '' }imm${ Math.abs(b) } ${ op }`,
         );
     }
@@ -208,12 +215,12 @@ abstract class MOV$ extends InstructionBase<{
 
 export class MOVK extends MOV$ {
     readonly opcode = "MOVK";
-    readonly zero   = false;
+    readonly zero = false;
 }
 
 export class MOVZ extends MOV$ {
     readonly opcode = "MOVK";
-    readonly zero   = true;
+    readonly zero = true;
 }
 
 export class ADRP extends InstructionBase<{ dst: RegisterGP, offset: bigint }> {
@@ -515,7 +522,7 @@ export class B extends InstructionBase<{ dst: bigint, cond: bigint }> {
     constructor ({ dst, cond }: { dst: bigint, cond: B.cond | undefined }) {
         super({ dst, cond: BigInt(B_condMap.indexOf(cond ?? "al")) });
         this.isUnconditional = cond === undefined;
-        this.opcode          = cond === undefined ? "B" : `B.${ cond }`;
+        this.opcode = cond === undefined ? "B" : `B.${ cond }`;
     }
 
     protected checkOperands (): void {

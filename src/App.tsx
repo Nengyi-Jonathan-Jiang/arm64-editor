@@ -3,12 +3,14 @@ import {
 } from 'react';
 import './App.css';
 import './chArm/parser';
+
+import { Executor } from "./chArm/execute.ts";
+import { State } from "./chArm/state.ts";
+
 import { CodeEditor } from './codeEditor/codeEditor';
 import { CodeHighlighter } from './codeEditor/codeHighlighter';
 import { HighlighterWithErrors } from './codeEditor/highlighterWithErrors';
-import {
-    HorizontalResizableDoublePane, VerticalResizableDoublePane,
-} from './resizable/resizable';
+import { HorizontalPanels, VerticalPanels } from './resizable/resizable';
 import { useListenerOnWindow, useManualRerender } from './util/hooks';
 import { tokenize } from './chArm/tokenizer';
 import { assembleChARM } from './chArm/parser';
@@ -65,17 +67,20 @@ const LineNumbers = memo(({ amount }: { amount: number }) => {
 
 function App () {
     const savedFuncName = localStorage.getItem("func") ?? "myfunc";
-    const savedCode     = localStorage.getItem("src") ?? "    ret";
+    const savedCode = localStorage.getItem("src") ?? "    ret";
 
     const [ funcName, setFuncName ] = useState(savedFuncName);
-    const [ code, setCode ]         = useState(savedCode);
-    const rerender                  = useManualRerender();
+    const [ code, setCode ] = useState(savedCode);
+    const [ blankStateGetter, setBlankStateGetter ] = useState(
+        () => () => State.new(),
+    );
+    const rerender = useManualRerender();
 
     useEffect(() => {
         document.title = (
             savedCode === code && savedFuncName === funcName
-            ? "" : "*"
-        ) + "chArm-v5-interpreter";
+                ? "" : "*"
+        ) + "arm64-editor";
     }, [ code, funcName ]);
 
     useListenerOnWindow({
@@ -83,21 +88,22 @@ function App () {
             if (e.ctrlKey && e.key.toLowerCase() === 's') {
                 localStorage.setItem("src", code);
                 localStorage.setItem("func", funcName);
-                document.title = "chArm-v5-interpreter";
+                document.title = "arm64-editor";
                 e.preventDefault();
                 rerender();
             }
         },
     }, [ code, funcName ]);
 
-    const tokenized = useMemo(
-        () => tokenize(code), [ code ]);
+    const tokenized = useMemo(() => tokenize(code), [ code ]);
     const [ instructions, _lineNumbers, errors ] = useMemo(
         () => assembleChARM(tokenized, funcName), [ tokenized, funcName ],
     );
     (window as any)['instructions'] = instructions;
 
-    return <HorizontalResizableDoublePane left={
+    const executor = useMemo(() => new Executor(State.new(), instructions), []);
+
+    return <HorizontalPanels left={
         <div id="asm-editor-outer">
             <LineNumbers amount={ code.split('\n').length + 6 }/>
             <div id="asm-editor">
@@ -147,15 +153,53 @@ function App () {
             </div>
         </div>
     } right={
-        <VerticalResizableDoublePane top={
-            <div>
+        <VerticalPanels top={
+            <div style={ { overflowY: 'scroll', padding: '.5em' } }>
                 <div id="run-controls">
-
+                    <button
+                        onClick={
+                            () => {
+                                executor.state = blankStateGetter();
+                                executor.program = instructions;
+                                rerender();
+                            }
+                        }
+                    >Reload
+                    </button>
+                    { " " }
+                    <button
+                        onClick={
+                            () => {
+                                executor.step();
+                                rerender();
+                            }
+                        }
+                    >Step
+                    </button>
                 </div>
+                <pre>
+                    {
+                        JSON.stringify(
+                            executor.currInstruction, (
+                                (_, x) => (typeof x === "bigint")
+                                    ? x.toString()
+                                    : x
+                            ), 0,
+                        )
+                    }
+                    { "\n" }
+                    {
+                        executor.state.DEBUG_registersAsStr()
+                    }
+                    { "\n" }
+                    {
+                        executor.state.DEBUG_memoryAsStr()
+                    }
+                </pre>
             </div>
         } bottom={
-            <div id="inputs-editor">
-                <InputsEditor setFunc={ () => void 0 }/>
+            <div id="inputs-editor" style={ { overflowY: 'scroll' } }>
+                <InputsEditor setFunc={ f => setBlankStateGetter(() => f) }/>
             </div>
         }/>
     }/>;
