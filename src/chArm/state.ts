@@ -1,6 +1,7 @@
 import {
     cloneArray, type IntRange, randUnsignedBigint, toHexString, wrapUndef,
 } from "../util/util";
+import { formatBin, formatDec, formatHex } from "./formatUtil.ts";
 
 export type Register = RegisterSP | RegisterZR;
 export type RegisterSP = RegisterGP | SP;
@@ -232,24 +233,25 @@ export class State {
             ];
         }
 
-        return registers
-            .map(i => [ i, this.getRegister(i) ] as const)
-            .map(([ n, i ]) => `${ (
-                    n.toString().padStart(2)
-                ) }: 0x${ (
-                    i.toString(16).padStart(16, '0')
-                ) } = unsigned ${ (
-                    i.toString().padStart(20)
-                ) } = signed ${ (
-                    BigInt.asIntN(64, i).toString().padStart(20)
-                ) }` + (
-                    binary ? ` = 0b ${ i.toString(2).padStart(64, '0') }` : ''
-                ),
-            ).join('\n');
-    }
-
-    printRegisters (binary: boolean = false, ...registers: Register[]) {
-        console.log(this.DEBUG_registersAsStr(binary, ...registers));
+        return `NZCV: ${ formatBin(this.flags, 4) }\n` +
+            `PC: 0x${ formatHex(
+                this.PC,
+                16,
+            ) } = index ${ this.currInstructionIndex }\n` + registers
+                .map(i => [ i, this.getRegister(i) ] as const)
+                .map(([ n, i ]) => `${ (
+                        `${ n }`.padStart(2)
+                    ) }: 0x${ formatHex(
+                        i,
+                        16,
+                    ) } = unsigned ${ (
+                        formatDec(i, 20, true)
+                    ) } = signed ${ (
+                        formatDec(BigInt.asIntN(64, i), 20, true)
+                    ) }` + (
+                        binary ? ` = 0b ${ formatBin(i, 64) }` : ''
+                    ),
+                ).join('\n');
     }
 
     DEBUG_memoryAsStr (view?: DataView): string {

@@ -1,6 +1,12 @@
-export function cast<T> (x: any): T {
-    return x as never as T;
+export type Supplier<T> = () => T;
+export type Consumer<T> = (x: T) => void;
+export type Action = () => void;
+
+export function cast<T> (x: unknown): T {
+    return x as T;
 }
+
+export function assert_type<T> (_: unknown): asserts _ is T {}
 
 export function wrapUndef<T> (
     x: T | undefined,
@@ -13,9 +19,7 @@ export function wrapUndef<T, U> (
  *
  * This is useful when propagating optional arguments
  */
-export function wrapUndef (
-    x: any, f?: (x: any) => any,
-): any {
+export function wrapUndef (x: any, f?: Function): any {
     return x === undefined ? [] : [ f ? f(x) : x ];
 }
 
@@ -75,7 +79,7 @@ export type FilterRecordValue<R extends Record<string, unknown>, V> =
 }
 
 export function splitWhitespace (s: string): [ string, string, string ] {
-    const [ , a, b, c ] = s.match(/^(\s*)(|[^\s]|[^\s].*[^\s])(\s*)$/s) ?? [
+    const [ , a, b, c ] = s.match(/^(\s*)(|\S|\S.*\S)(\s*)$/s) ?? [
         null, "", "", "",
     ];
     return [ a, b, c ];
@@ -103,7 +107,7 @@ export function cloneArray<T extends any[] | TypedArray> (arr: T): T {
 }
 
 export function getCached<K, T> (
-    m: Map<K, T>, key: K, defaultValue: () => T): T {
+    m: Map<K, T>, key: K, defaultValue: Supplier<T>): T {
     if (m.has(key)) {
         return m.get(key)!;
     }

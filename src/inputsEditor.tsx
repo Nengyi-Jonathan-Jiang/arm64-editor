@@ -1,9 +1,10 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo } from "react";
 import { CodeEditor } from "./codeEditor/codeEditor";
 import { type Register, type RegisterGP, State } from "./chArm/state";
 
 import "./inputsEditor.css";
-import { cast } from "./util/util.ts";
+import { cast, type Consumer, type Supplier } from "./util/util.ts";
+import type { Save } from "./app/save.ts";
 
 type IntSize = 8n | 16n | 32n | 64n;
 type Token = { type: string, s: string, error?: boolean } & (
@@ -28,10 +29,12 @@ const initialCode: string = `
 `.trim().replaceAll(/\s*\n\s*/g, '\n');
 
 export function InputsEditor (
-    { setFunc }: { setFunc: (f: () => State) => any },
+    { setFunc, save }: { setFunc: Consumer<Supplier<State>>, save: Save },
 ): ReactNode {
 
-    const [ inputsCode, setInputsCode ] = useState(initialCode);
+    const [ inputsCode, setInputsCode ] = save.useSaved(
+        'inputs', initialCode,
+    );
     const tokens = useMemo(() => tokenize(inputsCode), [ inputsCode ]);
 
     useEffect(
@@ -112,7 +115,7 @@ function tokenize (s: string): readonly Token[] {
     return tokens;
 }
 
-function parse (tokens: readonly Token[]): () => State {
+function parse (tokens: readonly Token[]): Supplier<State> {
     type Value = bigint | string;
 
     const labelPositions = new Map<string, bigint>;

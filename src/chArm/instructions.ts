@@ -569,6 +569,7 @@ export class RET extends InstructionBase<{ dst: RegisterGP }> {
 
     applyTo ({ dst }: this["O"], state: State): void | boolean {
         state.branchPCabs(state.getRegister(dst));
+        return true;
     }
 }
 
