@@ -26,11 +26,14 @@ static mut PARAMS: SimulatorParams = SimulatorParams {
 
 #[wasm_bindgen]
 pub unsafe fn get_params_ptr() -> *const SimulatorParams {
-    &PARAMS
+    &raw const PARAMS
 }
 
 pub fn get_params() -> &'static SimulatorParams {
-    unsafe { &PARAMS }
+    unsafe {
+        #[allow(static_mut_refs)]
+        &PARAMS
+    }
 }
 
 #[repr(C, packed)]
@@ -40,6 +43,8 @@ pub struct SimulatorParams {
     pub cycle_times: CycleTimeParams,
     pub branch_prediction: BranchPredictionParams,
 }
+
+
 
 #[repr(C, packed)]
 pub struct CacheParams {

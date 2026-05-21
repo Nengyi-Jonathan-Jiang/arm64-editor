@@ -4,12 +4,14 @@ const module: Omit<typeof simulatorStuff, 'initSync' | 'default'> & {
     memory: WebAssembly.Memory
 } = await init();
 
-let {
-        simulatorRegistersPtr,
-        simulatorMemoryPtr,
-        simulatorPipelineStagesPtr,
-        simulatorCachePtr,
-    } = module.init(Simulator.getDefaultSimulatorParams());
+// let {
+//         simulatorRegistersPtr,
+//         simulatorMemoryPtr,
+//         simulatorPipelineStagesPtr,
+//         simulatorCachePtr,
+//     } = module.init(Simulator.getDefaultSimulatorParams());
+export const paramsPtr = module.get_params_ptr();
+console.log(module.memory, paramsPtr)
 
 export namespace Simulator {
     export enum CachePolicy {

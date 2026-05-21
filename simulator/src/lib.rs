@@ -1,4 +1,5 @@
 mod js_interop;
+pub use js_interop::get_params_ptr;
 
 use wasm_bindgen::prelude::*;
 
