@@ -50,6 +50,7 @@ const FuncNameInput = ({
             }
         } }
         spellCheck="false"
+        autoComplete='off'
     />;
 };
 
