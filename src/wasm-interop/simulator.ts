@@ -1,4 +1,4 @@
-import init, * as simulatorStuff from 'simulator';
+import init, * as simulatorStuff from '@simulator';
 
 const module: Omit<typeof simulatorStuff, 'initSync' | 'default'> & {
     memory: WebAssembly.Memory
