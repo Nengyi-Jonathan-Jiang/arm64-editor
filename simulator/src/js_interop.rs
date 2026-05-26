@@ -1,42 +1,26 @@
-use wasm_bindgen::prelude::wasm_bindgen;
+use core::mem::MaybeUninit;
 
-// These values shouldn't matter as long as JS initializes them correctly
-static mut PARAMS: SimulatorParams = SimulatorParams {
-    cache_params: CacheParams {
-        associativity: 1,
-        block_size_log: 0,
-        num_sets_log: 0,
-        policy: CachePolicy::LRU,
-        write_mode: CacheWriteMode::WriteBack,
-    },
-    pipeline_params: PipelineParams {
-        pipeline_mode: PipelineMode::None,
-    },
-    cycle_times: CycleTimeParams {
-        cache_access: 1,
-        dram_penalty: 8,
-    },
-    branch_prediction: BranchPredictionParams {
-        dynamic_enabled: false,
-        bht_size_log: 0,
-        dynamic_predictor: DynamicBranchPredictor::OneBitSaturating,
-        static_mode: StaticBranchPredictionMode::Always,
-    },
-};
+static mut PARAMS_VOLATILE: MaybeUninit<SimulatorParams> = MaybeUninit::uninit();
 
-#[wasm_bindgen]
-pub unsafe fn get_params_ptr() -> *const SimulatorParams {
-    &raw const PARAMS
-}
-
-pub fn get_params() -> &'static SimulatorParams {
+/// Used by Javascript-side code to set parameters
+#[unsafe(export_name = "getParamsPtr")]
+unsafe fn get_params_ptr() -> *const SimulatorParams {
+    #[allow(static_mut_refs)]
     unsafe {
-        #[allow(static_mut_refs)]
-        &PARAMS
+        PARAMS_VOLATILE.as_ptr()
     }
 }
 
+#[unsafe(export_name = "initSimulator")]
+unsafe fn init_simulator() {
+    let params = unsafe { get_params_ptr().read_volatile() };
+    // TODO: initialize simulator
+}
+
+// Params type definition
+
 #[repr(C, packed)]
+#[derive(Copy, Clone)]
 pub struct SimulatorParams {
     pub cache_params: CacheParams,
     pub pipeline_params: PipelineParams,
@@ -44,9 +28,8 @@ pub struct SimulatorParams {
     pub branch_prediction: BranchPredictionParams,
 }
 
-
-
 #[repr(C, packed)]
+#[derive(Copy, Clone)]
 pub struct CacheParams {
     pub associativity: u8,
     pub block_size_log: u8,
@@ -57,17 +40,20 @@ pub struct CacheParams {
 }
 
 #[repr(C, packed)]
+#[derive(Copy, Clone)]
 pub struct PipelineParams {
     pub pipeline_mode: PipelineMode,
 }
 
 #[repr(C, packed)]
+#[derive(Copy, Clone)]
 pub struct CycleTimeParams {
     pub cache_access: u8,
     pub dram_penalty: u8,
 }
 
 #[repr(C, packed)]
+#[derive(Copy, Clone)]
 pub struct BranchPredictionParams {
     dynamic_enabled: bool,
     bht_size_log: u8,
@@ -76,18 +62,21 @@ pub struct BranchPredictionParams {
 }
 
 #[repr(u8)]
+#[derive(Copy, Clone)]
 pub enum CachePolicy {
     LRU = 0,
     NMRU = 1,
 }
 
 #[repr(u8)]
+#[derive(Copy, Clone)]
 pub enum CacheWriteMode {
     WriteBack = 0,
     WriteThrough = 1,
 }
 
 #[repr(u8)]
+#[derive(Copy, Clone)]
 pub enum PipelineMode {
     None = 0,
     ThreeStage = 1,
@@ -95,6 +84,7 @@ pub enum PipelineMode {
 }
 
 #[repr(u8)]
+#[derive(Copy, Clone)]
 pub enum StaticBranchPredictionMode {
     Always = 0,
     Never = 1,
@@ -102,6 +92,7 @@ pub enum StaticBranchPredictionMode {
 }
 
 #[repr(u8)]
+#[derive(Copy, Clone)]
 pub enum DynamicBranchPredictor {
     OneBitSaturating = 1,
     TwoBitSaturating = 2,

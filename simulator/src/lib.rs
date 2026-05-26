@@ -1,26 +1,13 @@
+#![no_std]
+
 mod js_interop;
-pub use js_interop::get_params_ptr;
+mod simulator;
 
-use wasm_bindgen::prelude::*;
 
-// When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
-// allocator.
-#[cfg(feature = "wee_alloc")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+use core::panic::PanicInfo;
 
-#[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-}
-
-#[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, wasm!");
-}
-
-#[wasm_bindgen]
-pub fn initialize_simulator() {
-    #[cfg(feature = "console_error_panic_hook")]
-    console_error_panic_hook::set_once();
+#[panic_handler]
+fn panic(_: &PanicInfo) -> ! {
+    // For Wasm, a common behavior is to trigger an unreachable instruction
+    core::arch::wasm32::unreachable();
 }
