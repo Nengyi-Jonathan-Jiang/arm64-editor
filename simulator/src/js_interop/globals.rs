@@ -22,21 +22,7 @@ mod dynamic {
 
     static CURR_LIMIT: VeryUnsafeCell<Ptr> = unsafe { transmute(&raw const __heap_base) };
     static CURR_END: VeryUnsafeCell<Ptr> = unsafe { CURR_LIMIT.clone() };
-
-
-
-    #[unsafe(export_name = "x")]
-    pub extern "C" fn do_thing(f: &(Instruction, Word), g: &Option<[u64; 5]>, h: Instruction, i: bool) -> SimulatorParams {
-        let mut res = [0; 9];
-        if i && let Some(g) = g {
-            res[0] = (g[0] ^ g[1] ^ g[2] ^ g[4] + f.1) as _;
-        }
-        else {
-            res[2] = (h + f.0) as _;
-        }
-        unsafe{*transmute::<_, *const SimulatorParams>(&res)}
-    }
-
+    
     // This is definitely not safe in a multithreaded context,
     #[unsafe(export_name = "append")]
     pub unsafe extern "C" fn append(num_bytes: usize) -> *mut () {

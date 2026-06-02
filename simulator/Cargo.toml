@@ -10,15 +10,14 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 [dev-dependencies]
 
-[profile.release]
+[profile.wasm]
+inherits = "release"
+
 opt-level = "s" # Small code size
 lto = true      # Link-time stripping of unused functions
 incremental = true
-
-panic = "abort"
+panic = "abort" # Don't include heavy code for handling panics
 
 # For autogenerating definitions. These will be stripped out in the final output by another pass
-
 strip = "none"  # Need these for better TypeScript definition generation
-# Needs to be
 debug = true    # Need these for better TypeScript definition generation

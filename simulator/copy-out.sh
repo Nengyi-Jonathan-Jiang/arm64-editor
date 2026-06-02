@@ -23,6 +23,8 @@ then
     if command -v llvm-dwarfdump >/dev/null 2>&1; then
         echo "Extracting debug info"
         llvm-dwarfdump "$unoptimized" > "$dwarf"
+    else
+      [ -f "$dwarf" ] && rm "$dwarf"
     fi
 else
     echo "Could not do optimizing pass"

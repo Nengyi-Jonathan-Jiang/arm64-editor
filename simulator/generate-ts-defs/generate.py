@@ -21,7 +21,10 @@ else:
         dwarf_vars = {v.link_name: v for v in dwarf_vars_list}
         dwarf_funcs = {f.link_name: f for f in dwarf_funcs_list}
 
-module_contents: list[str] = []
+module_contents: list[str] = [
+    '',
+    'readonly memory: WebAssembly.Memory;'
+]
 
 # Generate variable defs
 for var in exported_vars:
@@ -89,7 +92,7 @@ for func in exported_funcs:
         };'
     )
 
-with open('pkg/simulator.wasm.d.ts', 'w') as out:
+with open('pkg/simulator.d.ts', 'w') as out:
     module_contents_str = '\n'.join(module_contents)
 
     module_str = f'export const WASM_simulator : {{{

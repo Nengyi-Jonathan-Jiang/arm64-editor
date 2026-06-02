@@ -1,18 +1,9 @@
 # Make file for cargo make
 [tasks.build]
 command = "cargo"
-args = ["build", "--profile", "release"]
-
-[tasks.build-dev]
-command = "cargo"
-args = ["build", "--profile", "dev"]
+args = ["build", "--profile", "wasm"]
 
 [tasks.all]
 command = "bash"
 args = ["./copy-out.sh"]
 dependencies = ["build"]
-
-[tasks.all-dev]
-command = "bash"
-args = ["./copy-out.sh"]
-dependencies = ["build-dev"]
