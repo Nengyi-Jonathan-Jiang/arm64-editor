@@ -1,24 +1,3 @@
-use core::mem::MaybeUninit;
-
-static mut PARAMS_VOLATILE: MaybeUninit<SimulatorParams> = MaybeUninit::uninit();
-
-/// Used by Javascript-side code to set parameters
-#[unsafe(export_name = "getParamsPtr")]
-unsafe fn get_params_ptr() -> *const SimulatorParams {
-    #[allow(static_mut_refs)]
-    unsafe {
-        PARAMS_VOLATILE.as_ptr()
-    }
-}
-
-#[unsafe(export_name = "initSimulator")]
-unsafe fn init_simulator() {
-    let params = unsafe { get_params_ptr().read_volatile() };
-    // TODO: initialize simulator
-}
-
-// Params type definition
-
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
 pub struct SimulatorParams {
@@ -55,10 +34,9 @@ pub struct CycleTimeParams {
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
 pub struct BranchPredictionParams {
-    dynamic_enabled: bool,
-    bht_size_log: u8,
-    dynamic_predictor: DynamicBranchPredictor,
-    static_mode: StaticBranchPredictionMode,
+    pub bht_size_log: u8,
+    pub dynamic_predictor: DynamicBranchPredictor,
+    pub static_mode: StaticBranchPredictionMode,
 }
 
 #[repr(u8)]
@@ -94,6 +72,7 @@ pub enum StaticBranchPredictionMode {
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub enum DynamicBranchPredictor {
+    None = 0,
     OneBitSaturating = 1,
     TwoBitSaturating = 2,
 }

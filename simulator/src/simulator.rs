@@ -31,12 +31,22 @@ pub struct Simulator<'a> {
     _pin: PhantomPinned,
 }
 
-impl Simulator<'_> {
-}
+impl Simulator<'_> {}
 
 pub struct Memory<'a> {
     mem: &'a mut [u8],
 }
+
+pub mod sizes {
+    pub type Word = u64;
+    pub type HWord = u32;
+
+    pub type Addr = Word;
+    pub type Instruction = u32;
+    pub static INSTRUCTION_SIZE_BYTES: usize = 4;
+}
+use sizes::Word;
+use crate::simulator::sizes::Addr;
 
 pub trait Pipeline {
     /// Flush the pipeline
@@ -45,14 +55,14 @@ pub trait Pipeline {
     fn step(&mut self);
 }
 
-pub trait Cache {
+pub trait Cache {}
 
-}
-
-struct SimpleCache {
-
-}
+struct SimpleCache {}
 
 pub trait BranchPredictor {
+    fn predict(&self, addr: Addr, target_addr: Addr) -> bool;
+    fn predict_indirect(&self, addr: Addr) -> (bool, Addr);
 
+    fn update(&mut self, addr: Addr);
+    fn update_indirect(&mut self, addr: Addr, actual_target_addr: Addr);
 }
