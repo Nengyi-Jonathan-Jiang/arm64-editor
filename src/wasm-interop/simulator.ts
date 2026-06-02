@@ -1,8 +1,4 @@
-import init, * as simulatorStuff from '@simulator';
-
-const module: Omit<typeof simulatorStuff, 'initSync' | 'default'> & {
-    memory: WebAssembly.Memory
-} = await init();
+import module from '@simulator';
 
 // let {
 //         simulatorRegistersPtr,
@@ -10,7 +6,7 @@ const module: Omit<typeof simulatorStuff, 'initSync' | 'default'> & {
 //         simulatorPipelineStagesPtr,
 //         simulatorCachePtr,
 //     } = module.init(Simulator.getDefaultSimulatorParams());
-export const paramsPtr = module.get_params_ptr();
+export const paramsPtr = module.params_ptr;
 console.log(module.memory, paramsPtr)
 
 export namespace Simulator {

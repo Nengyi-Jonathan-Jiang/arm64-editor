@@ -95,7 +95,7 @@ for func in exported_funcs:
 with open('pkg/simulator.d.ts', 'w') as out:
     module_contents_str = '\n'.join(module_contents)
 
-    module_str = f'export const WASM_simulator : {{{
+    module_str = f'export const module : {{{
         ''.join('    ' + line + '\n' for line in module_contents_str.split('\n'))
-    }}}'
+    }}}\n// noinspection JSUnusedGlobalSymbols\nexport default module;'
     out.write(module_str)

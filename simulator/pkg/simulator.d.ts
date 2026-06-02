@@ -1,4 +1,4 @@
-export const WASM_simulator : {    
+export const module : {    
     readonly memory: WebAssembly.Memory;
     
     /**
@@ -34,3 +34,5 @@ export const WASM_simulator : {
      */
     append(a: number): number;
 }
+// noinspection JSUnusedGlobalSymbols
+export default module;
