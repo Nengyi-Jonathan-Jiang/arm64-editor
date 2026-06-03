@@ -5,19 +5,30 @@ authors = ["njona <n.jonathan.jiang@gmail.com>"]
 edition = "2024"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
+test = false
 
 [dependencies]
 [dev-dependencies]
 
-[profile.wasm]
-inherits = "release"
+[profile.dev]
 
+# Optimization settings
 opt-level = "s" # Small code size
 lto = true      # Link-time stripping of unused functions
-incremental = true
-panic = "abort" # Don't include heavy code for handling panics
+strip = "none"  # Used and stripped out by later pass
+debug = true    # Used and stripped out by later pass
+incremental = false
 
-# For autogenerating definitions. These will be stripped out in the final output by another pass
-strip = "none"  # Need these for better TypeScript definition generation
-debug = true    # Need these for better TypeScript definition generation
+# Assertion settings
+debug-assertions = true
+overflow-checks = true
+panic = "abort" # Don't include heavy code for handling panics in WASM
+
+[profile.test]  # Inherits from dev. We assume this is not run on a WASM target
+
+[profile.wasm]      # Basically release profile
+inherits = "dev"
+debug-assertions = false
+overflow-checks = false
+codegen-units = 1   # Shouldn't be too slow; we're not dealing with huge amounts of code

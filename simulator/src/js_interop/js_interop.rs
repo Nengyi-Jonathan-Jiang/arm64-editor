@@ -1,4 +1,4 @@
-use crate::js_interop::params::SimulatorParams;
+use crate::params::SimulatorParams;
 use core::mem::MaybeUninit;
 
 #[unsafe(export_name = "params_ptr")]

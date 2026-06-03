@@ -1,6 +1,8 @@
 from parse_dwarf import *
 from parse_decompiled import *
 
+print('Analyzing')
+
 with open("./pkg/simulator.wasm.decompiled.txt", "r") as decompiled:
     decompiled_text = decompiled.read()
     exported_vars, exported_funcs = parse_decompiled(decompiled_text)
@@ -20,6 +22,8 @@ else:
         dwarf_vars_list, dwarf_funcs_list = parse_dwarf(dwarf_text)
         dwarf_vars = {v.link_name: v for v in dwarf_vars_list}
         dwarf_funcs = {f.link_name: f for f in dwarf_funcs_list}
+
+print('Generating defs')
 
 module_contents: list[str] = [
     '',
@@ -92,6 +96,8 @@ for func in exported_funcs:
         };'
     )
 
+print('Writing to file')
+
 with open('pkg/simulator.d.ts', 'w') as out:
     module_contents_str = '\n'.join(module_contents)
 
@@ -99,3 +105,5 @@ with open('pkg/simulator.d.ts', 'w') as out:
         ''.join('    ' + line + '\n' for line in module_contents_str.split('\n'))
     }}}\n// noinspection JSUnusedGlobalSymbols\nexport default module;'
     out.write(module_str)
+
+print('Done')

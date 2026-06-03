@@ -45,7 +45,6 @@ pub mod sizes {
     pub type Instruction = u32;
     pub static INSTRUCTION_SIZE_BYTES: usize = 4;
 }
-use sizes::Word;
 use crate::simulator::sizes::Addr;
 
 pub trait Pipeline {

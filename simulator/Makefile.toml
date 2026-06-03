@@ -1,9 +1,11 @@
 # Make file for cargo make
 [tasks.build]
 command = "cargo"
-args = ["build", "--profile", "wasm"]
+args = ["build", "--target", "wasm32-unknown-unknown", "--profile", "wasm"]
+
+[tasks.pkg]
+command = "bash"
+args = ["./pkg.sh"]
 
 [tasks.all]
-command = "bash"
-args = ["./copy-out.sh"]
-dependencies = ["build"]
+dependencies = ["build", "pkg"]

@@ -1,11 +1,8 @@
-use core::sync::atomic::Ordering::SeqCst;
 
+// VERY BAD unsafe code
 mod dynamic {
     use crate::js_interop::very_unsafe_cell::VeryUnsafeCell;
-    use crate::simulator::sizes::{Instruction, Word};
     use core::mem::transmute;
-    use crate::components::branch_predictor::Predictor0;
-    use crate::js_interop::SimulatorParams;
 
     type Ptr = *mut ();
 
@@ -18,12 +15,9 @@ mod dynamic {
         fn request_enough_mem_for_ptr(ptr: Ptr) -> Ptr;
     }
 
-    // Very bad unsafe trickery that is ONLY valid in single-threaded WebAssembly
-
     static CURR_LIMIT: VeryUnsafeCell<Ptr> = unsafe { transmute(&raw const __heap_base) };
     static CURR_END: VeryUnsafeCell<Ptr> = unsafe { CURR_LIMIT.clone() };
-    
-    // This is definitely not safe in a multithreaded context,
+
     #[unsafe(export_name = "append")]
     pub unsafe extern "C" fn append(num_bytes: usize) -> *mut () {
         let curr_end = unsafe { CURR_END.get().as_mut_unchecked() };
@@ -44,7 +38,7 @@ mod dynamic {
 
         res
     }
-
+    
     pub unsafe fn reset() {
         unsafe { CURR_END.set(transmute(&raw const __heap_base)) };
     }

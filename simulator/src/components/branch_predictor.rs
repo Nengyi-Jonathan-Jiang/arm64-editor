@@ -1,4 +1,4 @@
-use crate::js_interop::StaticBranchPredictionMode;
+use crate::params::StaticBranchPredictionMode;
 use crate::simulator::BranchPredictor;
 use crate::simulator::sizes::Addr;
 

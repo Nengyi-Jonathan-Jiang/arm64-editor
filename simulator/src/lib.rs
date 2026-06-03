@@ -1,15 +1,9 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
-mod js_interop;
-mod simulator;
 mod components;
+mod simulator;
+mod params;
 
+// Only include interop when not testing (otherwise a lot of stuff breaks)
 #[cfg(not(test))]
-const _ : () = { // A bit hacky to make cfg only apply to
-    use core::panic::PanicInfo;
-    #[panic_handler]
-    fn panic(_: &PanicInfo) -> ! {
-        // For Wasm, a common behavior is to trigger an unreachable instruction
-        core::arch::wasm32::unreachable();
-    }
-};
+mod js_interop;

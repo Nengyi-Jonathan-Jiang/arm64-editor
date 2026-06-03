@@ -4,7 +4,7 @@ export const module : {
     /**
      * - WASM type: `int`
      * - Rust name: `PARAMS_VOLATILE`
-     * - Rust type: `core::mem::maybe_uninit::MaybeUninit<simulator::js_interop::params::SimulatorParams>`
+     * - Rust type: `core::mem::maybe_uninit::MaybeUninit<simulator::params::SimulatorParams>`
      */
     readonly params_ptr: number;
     
@@ -19,11 +19,6 @@ export const module : {
     readonly data_end: number;
     
     /**
-     * - Rust name: `init_simulator`
-     */
-    initSimulator(): void;
-    
-    /**
      * - Return type: `int`
      * - Rust return type: `() *`
      * - Rust name: `append`
@@ -33,6 +28,11 @@ export const module : {
      *      - Rust name: `num_bytes`
      */
     append(a: number): number;
+    
+    /**
+     * - Rust name: `init_simulator`
+     */
+    initSimulator(): void;
 }
 // noinspection JSUnusedGlobalSymbols
 export default module;

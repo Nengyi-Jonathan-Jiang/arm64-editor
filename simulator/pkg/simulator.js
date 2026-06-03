@@ -13,7 +13,15 @@ const WASM_instantiate_result = await WebAssembly.instantiateStreaming(
                 const required_amount_bytes = ptr - memory.buffer.byteLength;
                 const bytesPerPage = 64 * 1024;
                 if (required_amount_bytes > 0) {
-                    memory.grow(Math.ceil(required_amount_bytes / bytesPerPage));
+                    try {
+                        memory.grow(Math.ceil(required_amount_bytes / bytesPerPage));
+                    } catch (e) {
+                        if (e instanceof RangeError) {
+                            return 0; // Too much memory; return 0 (aka NULL)
+                        }
+                        // Something else weird happened.
+                        throw e;
+                    }
                 }
                 return memory.buffer.byteLength;
             }
