@@ -1,2 +1,1 @@
-*.wasm.*.txt
-*.unoptimized.wasm
+simulator.unoptimized.wasm

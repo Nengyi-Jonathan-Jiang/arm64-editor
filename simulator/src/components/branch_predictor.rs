@@ -1,6 +1,6 @@
+use crate::components::BranchPredictor;
+use crate::components::sizes::Addr;
 use crate::params::StaticBranchPredictionMode;
-use crate::simulator::BranchPredictor;
-use crate::simulator::sizes::Addr;
 
 struct BhtEntry<EntryData> {
     last_indirect_target: Addr,

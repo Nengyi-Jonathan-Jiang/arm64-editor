@@ -1,13 +1,16 @@
+use crate::components::Simulator;
+use crate::wasm_only::very_unsafe_cell::VeryUnsafeCell;
+
+static SIMULATOR: VeryUnsafeCell<Option<Simulator>> = VeryUnsafeCell::new(None);
 
 // VERY BAD unsafe code
 mod dynamic {
-    use crate::js_interop::very_unsafe_cell::VeryUnsafeCell;
-    use core::mem::transmute;
+    use crate::wasm_only::very_unsafe_cell::VeryUnsafeCell;
 
     type Ptr = *mut ();
 
     unsafe extern "C" {
-        // This links to a symbol defined by linker marking the beginning of the heap
+        /// Links to a symbol defined by linker marking the beginning of the heap
         static __heap_base: u8;
 
         /// Requests JS to expand WASM memory to fit the pointer given. This returns the new memory
@@ -15,11 +18,19 @@ mod dynamic {
         fn request_enough_mem_for_ptr(ptr: Ptr) -> Ptr;
     }
 
-    static CURR_LIMIT: VeryUnsafeCell<Ptr> = unsafe { transmute(&raw const __heap_base) };
-    static CURR_END: VeryUnsafeCell<Ptr> = unsafe { CURR_LIMIT.clone() };
+    macro_rules! heap_base {
+        () => {
+            &raw const __heap_base as Ptr
+        };
+    }
+
+    static CURR_LIMIT: VeryUnsafeCell<Ptr> = VeryUnsafeCell::new(heap_base!());
+    static CURR_END: VeryUnsafeCell<Ptr> = VeryUnsafeCell::new(heap_base!());
 
     #[unsafe(export_name = "append")]
     pub unsafe extern "C" fn append(num_bytes: usize) -> *mut () {
+        // We can do all of this because WASM runs in a single-threaded context
+
         let curr_end = unsafe { CURR_END.get().as_mut_unchecked() };
         let res = curr_end.clone();
 
@@ -38,8 +49,8 @@ mod dynamic {
 
         res
     }
-    
+
     pub unsafe fn reset() {
-        unsafe { CURR_END.set(transmute(&raw const __heap_base)) };
+        unsafe { CURR_END.set(heap_base!()) };
     }
 }

@@ -5,8 +5,7 @@ authors = ["njona <n.jonathan.jiang@gmail.com>"]
 edition = "2024"
 
 [lib]
-crate-type = ["cdylib"]
-test = false
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 [dev-dependencies]
@@ -26,6 +25,7 @@ overflow-checks = true
 panic = "abort" # Don't include heavy code for handling panics in WASM
 
 [profile.test]  # Inherits from dev. We assume this is not run on a WASM target
+# Note that tests ignore panic setting and always use unwind behavior
 
 [profile.wasm]      # Basically release profile
 inherits = "dev"

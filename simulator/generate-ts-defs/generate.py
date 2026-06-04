@@ -1,27 +1,40 @@
 from parse_dwarf import *
 from parse_decompiled import *
+import subprocess
+import sys
+import os
+
+UNOPTIMIZED_FILE = './pkg/simulator.unoptimized.wasm'
+
+print('Getting debug info')
+if not os.path.isfile(UNOPTIMIZED_FILE):
+    print('Could not find pkg/simulator.unoptimized.wasm', file=sys.stderr)
+    exit(1)
+try:
+    decompiled = subprocess.run(f'wasm-decompile "{UNOPTIMIZED_FILE}"', stdout=subprocess.PIPE, check=True).stdout
+except FileNotFoundError:
+    print('Could not decompile binary; is wasm-decompile installed? (Required)', file=sys.stderr)
+    exit(1)
+try:
+    dwarf = subprocess.run(f'llvm-dwarfdump "{UNOPTIMIZED_FILE}"', stdout=subprocess.PIPE, check=False).stdout
+except FileNotFoundError:
+    print('Could not read dwarf info; is llvm-dwarfdump installed? (Optional)', file=sys.stderr)
+    dwarf = None
 
 print('Analyzing')
 
-with open("./pkg/simulator.wasm.decompiled.txt", "r") as decompiled:
-    decompiled_text = decompiled.read()
-    exported_vars, exported_funcs = parse_decompiled(decompiled_text)
+decompiled_text = decompiled.decode('utf-8')
+exported_vars, exported_funcs = parse_decompiled(decompiled_text)
 
-dwarf_vars: dict[str, DwarfVariable]
-dwarf_funcs: dict[str, DwarfFunction]
+dwarf_vars: dict[str, DwarfVariable] = {}
+dwarf_funcs: dict[str, DwarfFunction] = {}
 
-try:
-    dwarf_file = open("./pkg/simulator.wasm.dwarf.txt", "r")
-except FileNotFoundError:
-    dwarf_vars, dwarf_funcs = {}, {}
-else:
-    with dwarf_file as dwarf:
-        dwarf_text = dwarf.read()
-        dwarf_text = re.sub(r'^0x[0-9a-fA-F]{8}:', ' ' * 11, dwarf_text, flags=re.RegexFlag.M)
-
-        dwarf_vars_list, dwarf_funcs_list = parse_dwarf(dwarf_text)
-        dwarf_vars = {v.link_name: v for v in dwarf_vars_list}
-        dwarf_funcs = {f.link_name: f for f in dwarf_funcs_list}
+if dwarf is not None:
+    dwarf_text = dwarf.decode('utf-8')
+    dwarf_text = re.sub(r'^0x[0-9a-fA-F]{8}:', ' ' * 11, dwarf_text, flags=re.RegexFlag.M)
+    dwarf_vars_list, dwarf_funcs_list = parse_dwarf(dwarf_text)
+    dwarf_vars = {v.link_name: v for v in dwarf_vars_list}
+    dwarf_funcs = {f.link_name: f for f in dwarf_funcs_list}
 
 print('Generating defs')
 
@@ -67,7 +80,7 @@ for func in exported_funcs:
             param_assignment.extend(zip((p.link_name for p in func.params[1:]), func_info.params))
 
         elif len(func.params) != len(func_info.params):
-            print(f'Param length mismatch for {func.link_name}:', func.params, func_info.params)
+            print(f'Param length mismatch for {func.link_name}:', func.params, func_info.params, file=sys.stderr)
             doc.append(repr(func_info.params))
         else:
             param_assignment.extend(zip((p.link_name for p in func.params), func_info.params))

@@ -3,7 +3,7 @@ use core::ops::Deref;
 
 /// VERY UNSAFE wrapper type with interior mutability that implements Send and Sync for an arbitrary
 /// type. The memory layout of this type is guaranteed to be the same as its wrapped value. Should
-/// only be used when it is known that no
+/// only be used when it is known that no undefined behavior will be triggered
 #[repr(transparent)]
 pub struct VeryUnsafeCell<T> {
     value: UnsafeCell<T>,

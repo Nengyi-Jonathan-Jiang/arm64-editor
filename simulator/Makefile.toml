@@ -5,7 +5,15 @@ args = ["build", "--target", "wasm32-unknown-unknown", "--profile", "wasm"]
 
 [tasks.pkg]
 command = "bash"
-args = ["./pkg.sh"]
+args = ["./scripts/pkg.sh"]
+
+[tasks.generate-types]
+command = "python"
+args = ["./generate-ts-defs/generate.py"]
 
 [tasks.all]
-dependencies = ["build", "pkg"]
+dependencies = ["build", "pkg", "generate-types"]
+
+[tasks.clean]
+command = "bash"
+args = ["./scripts/clean-pkg.sh"]
