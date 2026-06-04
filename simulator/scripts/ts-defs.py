@@ -1,24 +1,36 @@
-from parse_dwarf import *
-from parse_decompiled import *
-import subprocess
-import sys
-import os
+import subprocess, sys, os
 
-UNOPTIMIZED_FILE = './pkg/simulator.unoptimized.wasm'
+from helpers.parse_dwarf import *
+from helpers.parse_decompiled import *
+from helpers.files import *
 
 print('Getting debug info')
-if not os.path.isfile(UNOPTIMIZED_FILE):
-    print('Could not find pkg/simulator.unoptimized.wasm', file=sys.stderr)
+if not os.path.isfile(file_wasm_unoptimized):
+    print(f'Could not find {file_wasm_unoptimized}', file=sys.stderr)
     exit(1)
 try:
-    decompiled = subprocess.run(f'wasm-decompile "{UNOPTIMIZED_FILE}"', stdout=subprocess.PIPE, check=True).stdout
+    decompiled = subprocess.run(
+        f'wasm-decompile "{file_wasm_unoptimized}"',
+        stdout=subprocess.PIPE,
+        check=True
+    ).stdout
 except FileNotFoundError:
-    print('Could not decompile binary; is wasm-decompile installed? (Required)', file=sys.stderr)
+    print(
+        'Could not decompile binary; is wasm-decompile installed?',
+        file=sys.stderr
+    )
     exit(1)
 try:
-    dwarf = subprocess.run(f'llvm-dwarfdump "{UNOPTIMIZED_FILE}"', stdout=subprocess.PIPE, check=False).stdout
+    dwarf = subprocess.run(
+        f'llvm-dwarfdump "{file_wasm_unoptimized}"',
+        stdout=subprocess.PIPE,
+        check=False
+    ).stdout
 except FileNotFoundError:
-    print('Could not read dwarf info; is llvm-dwarfdump installed? (Optional)', file=sys.stderr)
+    print(
+        'llvm-dwarfdump (optional) not found; skipping dwarf info',
+        file=sys.stderr
+    )
     dwarf = None
 
 print('Analyzing')
@@ -31,7 +43,8 @@ dwarf_funcs: dict[str, DwarfFunction] = {}
 
 if dwarf is not None:
     dwarf_text = dwarf.decode('utf-8')
-    dwarf_text = re.sub(r'^0x[0-9a-fA-F]{8}:', ' ' * 11, dwarf_text, flags=re.RegexFlag.M)
+    dwarf_text = re.sub(r'^0x[0-9a-fA-F]{8}:', ' ' * 11, dwarf_text,
+                        flags=re.RegexFlag.M)
     dwarf_vars_list, dwarf_funcs_list = parse_dwarf(dwarf_text)
     dwarf_vars = {v.link_name: v for v in dwarf_vars_list}
     dwarf_funcs = {f.link_name: f for f in dwarf_funcs_list}
@@ -74,22 +87,30 @@ for func in exported_funcs:
         doc.append(f'- Rust name: `{func_info.name}`')
 
         param_assignment: list[tuple[str, DwarfParam]] = []
-        # wasm returns nothing but rust returns non-unit; we probably used RVO and added an extra param to wasm
-        if not func.WASM_type and func_info.return_type != '()' and len(func.params) == len(func_info.params) + 1:
-            param_assignment.append((func.params[0].link_name, DwarfParam('<RVO return value>', func_info.return_type)))
-            param_assignment.extend(zip((p.link_name for p in func.params[1:]), func_info.params))
+        if not func.WASM_type and func_info.return_type != '()' and len(
+                func.params) == len(func_info.params) + 1:
+            param_assignment.append((func.params[0].link_name,
+                                     DwarfParam('<RVO return value>',
+                                                func_info.return_type)))
+            param_assignment.extend(
+                zip((p.link_name for p in func.params[1:]), func_info.params))
 
         elif len(func.params) != len(func_info.params):
-            print(f'Param length mismatch for {func.link_name}:', func.params, func_info.params, file=sys.stderr)
+            print(f'Param length mismatch for {func.link_name}:', func.params,
+                  func_info.params, file=sys.stderr)
             doc.append(repr(func_info.params))
         else:
-            param_assignment.extend(zip((p.link_name for p in func.params), func_info.params))
+            param_assignment.extend(
+                zip((p.link_name for p in func.params), func_info.params))
 
         for param_name, param_info in param_assignment:
             if param_info.type is not None:
                 param_docs[param_name].append(f'Rust type: `{param_info.type}`')
             if param_info.name == '<RVO return value>':
-                param_docs[param_name].insert(0, f'Converted from RVO return value')
+                param_docs[param_name].insert(
+                    0,
+                    f'Converted from RVO return value'
+                )
             elif param_info.name is not None:
                 param_docs[param_name].append(f'Rust name: `{param_info.name}`')
 
@@ -111,11 +132,11 @@ for func in exported_funcs:
 
 print('Writing to file')
 
-with open('pkg/simulator.d.ts', 'w') as out:
+with open(file_ts_defs, 'w') as out:
     module_contents_str = '\n'.join(module_contents)
 
     module_str = f'export const module : {{{
-        ''.join('    ' + line + '\n' for line in module_contents_str.split('\n'))
+    ''.join('    ' + line + '\n' for line in module_contents_str.split('\n'))
     }}}\n// noinspection JSUnusedGlobalSymbols\nexport default module;'
     out.write(module_str)
 

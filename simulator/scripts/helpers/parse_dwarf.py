@@ -40,11 +40,13 @@ def parse_dwarf(dwarf: str) -> tuple[list[DwarfVariable], list[DwarfFunction]]:
     methods: list[DwarfFunction] = []
     variables: list[DwarfVariable] = []
 
-    defs_raw = _find_objs([_TAG_FUNC, _TAG_VAR], dwarf.splitlines(), any_level=True)
+    defs_raw = _find_objs([_TAG_FUNC, _TAG_VAR], dwarf.splitlines(),
+                          any_level=True)
     for def_tag, def_lines in defs_raw:
         # Get basic info
         header_lines = _get_header(def_lines)
-        if def_tag == _TAG_FUNC and header_lines[0].strip() == 'DW_AT_low_pc\t(dead code)':
+        if def_tag == _TAG_FUNC and header_lines[
+            0].strip() == 'DW_AT_low_pc\t(dead code)':
             continue  # Dead code, cannot be an export
 
         header_info = dict(_find_objs([
@@ -69,7 +71,8 @@ def parse_dwarf(dwarf: str) -> tuple[list[DwarfVariable], list[DwarfFunction]]:
         name = _parse_string_attribute(header_info[_AT_NAME][0])
 
         if _AT_LINK_NAME in header_info:
-            linkage_name = _parse_string_attribute(header_info[_AT_LINK_NAME][0])
+            linkage_name = _parse_string_attribute(
+                header_info[_AT_LINK_NAME][0])
         else:
             linkage_name = name
 
@@ -87,14 +90,19 @@ def parse_dwarf(dwarf: str) -> tuple[list[DwarfVariable], list[DwarfFunction]]:
 
             params: list[DwarfParam] = []
             for _, param_lines in params_raw:
-                param_info = dict(_find_objs([_AT_NAME, _AT_TYPE], param_lines))
+                param_info = dict(_find_objs(
+                    [_AT_NAME, _AT_TYPE], param_lines
+                ))
 
-                param_name = _parse_string_attribute(param_info.get(_AT_NAME, [""])[0])
-                param_type = _parse_string_attribute(param_info.get(_AT_TYPE, [""])[0])
+                param_name = _parse_string_attribute(
+                    param_info.get(_AT_NAME, [""])[0])
+                param_type = _parse_string_attribute(
+                    param_info.get(_AT_TYPE, [""])[0])
 
                 params.append(DwarfParam(param_name, param_type))
 
-            methods.append(DwarfFunction(linkage_name, name, params, export_type))
+            methods.append(
+                DwarfFunction(linkage_name, name, params, export_type))
         else:  # def_tag == _TAG_VAR
             variables.append(DwarfVariable(linkage_name, name, export_type))
 
@@ -105,7 +113,9 @@ def _parse_string_attribute(s: str) -> str | None:
     """
     Parse an attribute of the format ``(<address>? "<string>")``
     """
-    match = re.fullmatch(r"\((?:0x[0-9a-fA-F]{8}\s+)?\"(.+)\"\)", ''.join(s))
+    match = re.fullmatch(
+        r"\((?:0x[0-9a-fA-F]{8}\s+)?\"(.+)\"\)", ''.join(s)
+    )
     if match is None:
         return None
     # Fix names to match wasm-decompile output
@@ -124,7 +134,8 @@ def _get_header(lines: list[str]):
         return lines
 
 
-def _find_objs(match: list[str], lines: list[str], any_level: bool = False) -> list[tuple[str, list[str]]]:
+def _find_objs(match: list[str], lines: list[str], any_level: bool = False) -> \
+        list[tuple[str, list[str]]]:
     """
     Find all objects matching the given list, given a
     list of lines. The objects' type and the lines in
@@ -164,10 +175,17 @@ def _find_objs(match: list[str], lines: list[str], any_level: bool = False) -> l
 
             while line_index < len(lines):
                 line = lines[line_index]
-                if line != '' and _count_leading_space(line) <= initial_leading_space:
+                if line != '' and _count_leading_space(
+                        line) <= initial_leading_space:
                     break
                 section_lines.append(line[initial_leading_space:])
                 line_index += 1
             result.append((obj, section_lines))
 
     return result
+
+
+if __name__ == '__main__':
+    raise RuntimeError(
+        'This is a module, not a script. Did you mean to run ts-defs.py?'
+    )

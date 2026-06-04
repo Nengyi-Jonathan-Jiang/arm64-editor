@@ -15,7 +15,8 @@ class DecompiledVariable:
     WASM_type: str
 
 
-def parse_decompiled(disassembly: str) -> tuple[list[DecompiledVariable], list[DecompiledFunction]]:
+def parse_decompiled(disassembly: str) -> tuple[
+    list[DecompiledVariable], list[DecompiledFunction]]:
     """
     Given the contents of a file generated with wasm-decompile,
     return the exported functions and static variables
@@ -41,7 +42,8 @@ def parse_decompiled(disassembly: str) -> tuple[list[DecompiledVariable], list[D
     return variables, functions
 
 
-def _parse_variables(raw_variables: list[tuple[str, str]]) -> list[DecompiledVariable]:
+def _parse_variables(raw_variables: list[tuple[str, str]]) -> list[
+    DecompiledVariable]:
     variables: list[DecompiledVariable] = []
     for name, type_ in raw_variables:
         variables.append(DecompiledVariable(
@@ -51,7 +53,8 @@ def _parse_variables(raw_variables: list[tuple[str, str]]) -> list[DecompiledVar
     return variables
 
 
-def _parse_methods(raw_methods: list[tuple[str, str, str]]) -> list[DecompiledFunction]:
+def _parse_methods(raw_methods: list[tuple[str, str, str]]) -> list[
+    DecompiledFunction]:
     functions: list[DecompiledFunction] = []
     for name, raw_params, return_type in raw_methods:
         raw_params = raw_params.strip()
@@ -74,16 +77,19 @@ def _parse_params(raw_params: str) -> list[DecompiledVariable]:
 
     # List of structs that were substituted for placeholders
     substitution: list[str] = []
+
     def sub(m: re.Match) -> str:
         """ Substitute a struct type for a placeholder """
         substitution.append(m.group(1))
         return f'#{len(substitution) - 1}'
 
-    old_len = -1                        # Help keep track of whether any substitutions were made
-    while len(substitution) != old_len: # Repeat as long as we make new substitutions
+    old_len = -1  # Help keep track of whether any substitutions were made
+    while len(substitution) != old_len:
         old_len = len(substitution)
         # Substitute non-nested struct types with placeholder
-        raw_params = re.sub(r"({\s*\w+\s*:\s*#?\w+(?:\s*,\s*\w+\s*:#?\s*\w+)*\s*})", sub, raw_params)
+        raw_params = re.sub(
+            r"({\s*\w+\s*:\s*#?\w+(?:\s*,\s*\w+\s*:#?\s*\w+)*\s*})", sub,
+            raw_params)
 
     # Now raw_params has no struct types
 
@@ -96,6 +102,13 @@ def _parse_params(raw_params: str) -> list[DecompiledVariable]:
         for index, t in list(enumerate(substitution))[::-1]:
             param_type = param_type.replace(f'#{index}', t)
 
-        params.append(DecompiledVariable(param_name.strip(), param_type.strip()))
+        params.append(
+            DecompiledVariable(param_name.strip(), param_type.strip()))
 
     return params
+
+
+if __name__ == '__main__':
+    raise RuntimeError(
+        'This is a module, not a script. Did you mean to run ts-defs.py?'
+    )

@@ -1,34 +1,60 @@
-# Requirements to build
-`cargo` and [wabt](https://github.com/WebAssembly/wabt) (specifically 
-`wasm-decompile`, `wasm-opt`, and `wasm-strip`) must be installed.
+# Build Requirements
 
-If TypeScript definitions need to be updated, `python` is also required.
-[`llvm-dwarfdump`](https://github.com/llvm) can also be installed to allow generated TypeScript 
-definitions to have more detailed type and parameter info.
+Required:
+- Rust and `cargo`
+- `wabt` (for WebAssembly-specific optimization passes)
+- Either `bash` or `python` (used by build scripts)
+
+Optional:
+- `python` to regenerate TypeScript definitions
+- [`llvm-dwarfdump`](https://github.com/llvm) enables generation of more detailed TypeScript type 
+  information
+- [`cargo make`](https://github.com/sagiegurari/cargo-make) to run the full build with one command
 
 # Building
-The target should be set to `wasm32-unknown-unknown` for all commands 
-that use it, either through an environment variable or by using the 
-corresponding argument, ***unless*** the target profile is `test`. 
-Since there is no easy way to test WASM binaries using Rust's built-in
-`cargo test`, tests should instead be built and run for the host 
-architecture.
 
-Run `cargo build --profile wasm` to 
-compile the binary. The `dev` target may also be used to enable 
-assertions and checks.
+### Using Cargo Make 
 
-Then, run `./scripts/pkg.sh` to optimize the WASM module and copy it to
-the `pkg` directory for the main web app to use, as well as generate 
-debugging info 
+If Cargo Make is installed, run:
+`cargo make all`
 
-If TypeScript types need to be updated for WASM functions or variables,
-run `python generate-ts-defs/generate.py` to regenerate the type 
-definitions.
+### Manual
 
-Alternatively, these can be done in one step if
-[Cargo make](https://github.com/sagiegurari/cargo-make)
-is installed; run `cargo make all`
+If Cargo Make is not available, perform the build steps manually:
 
-# Testing
-Run `cargo test` to run all unit tests.
+#### 1. Compile the Rust crate to WebAssembly
+
+Build for the `wasm32-unknown-unknown` target using either the `dev` profile or 
+the custom `wasm` profile:
+
+```bash
+cargo build --target wasm32-unknown-unknown --profile wasm
+```
+
+#### 2. Package and optimize the generated WebAssembly
+
+```bash
+bash ./scripts/pkg.sh
+```
+
+This runs WebAssembly-specific optimization passes provided by WABT and copies 
+the generated artifacts into the directory structure expected by webpack
+
+#### 3. Regenerate TypeScript definitions (optional)
+
+If exported WASM functions, globals, or types have changed, regenerate the 
+TypeScript bindings:
+
+```bash
+python ./scripts/ts-defs.py
+```
+
+## Testing
+
+Run all unit tests on the host target:
+
+```bash
+cargo test
+```
+
+Tests should be executed natively rather than through the WebAssembly target.

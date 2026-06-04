@@ -1,19 +1,60 @@
 # Make file for cargo make
+[config]
+skip_core_tasks = true
+skip_git_env_info = true
+
 [tasks.build]
 command = "cargo"
 args = ["build", "--target", "wasm32-unknown-unknown", "--profile", "wasm"]
 
 [tasks.pkg]
-command = "bash"
-args = ["./scripts/pkg.sh"]
+script = """
+if which python; then
+    python ./scripts/pkg.py
+else
+    ./scripts/pkg.sh
+fi
+"""
 
-[tasks.generate-types]
+[tasks.pkg.windows]
+script = """
+where python >nul 2>nul
+IF %ERRORLEVEL%==0 (
+    python ./scripts/pkg.py
+) ELSE (
+    bash ./scripts/pkg.sh
+)
+"""
+
+[tasks.ts-defs]
 command = "python"
-args = ["./generate-ts-defs/generate.py"]
+args = ["./scripts/ts-defs.py"]
 
 [tasks.all]
-dependencies = ["build", "pkg", "generate-types"]
+dependencies = ["build", "pkg", "ts-defs"]
+
+[tasks.clean-rust]
+command = "cargo"
+args = ["clean"]
+
+[tasks.clean-pkg]
+script = """
+if which python; then
+    python ./scripts/clean-pkg.py
+else
+    ./scripts/clean-pkg.sh
+fi
+"""
+
+[tasks.clean-pkg.windows]
+script = """
+where python >nul 2>nul
+IF %ERRORLEVEL%==0 (
+    python ./scripts/clean-pkg.py
+) ELSE (
+    bash ./scripts/clean-pkg.sh
+)
+"""
 
 [tasks.clean]
-command = "bash"
-args = ["./scripts/clean-pkg.sh"]
+dependencies = ["clean-rust", "clean-pkg"]

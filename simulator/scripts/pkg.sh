@@ -4,6 +4,7 @@ unoptimized="$dir/simulator.unoptimized.wasm"
 temp="$dir/temp.wasm"
 dest="$dir/simulator.wasm"
 
+echo "Copying build output"
 set -o pipefail
 if ls -t target/wasm32-unknown-unknown/**/simulator.wasm \
     | head -n 1 \
