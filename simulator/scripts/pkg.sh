@@ -1,6 +1,6 @@
 # shellcheck disable=SC2012
 dir="./pkg"
-unoptimized="$dir/simulator.unoptimized.wasm"
+debug="$dir/simulator.debug.wasm"
 temp="$dir/temp.wasm"
 dest="$dir/simulator.wasm"
 
@@ -10,11 +10,12 @@ if ls -t target/wasm32-unknown-unknown/**/simulator.wasm \
     | head -n 1 \
     | xargs -I{} cp {} "$temp"
 then
-    cp -f "$temp" "$unoptimized"
-
     echo "Optimizing wasm"
-    wasm-opt -O "$temp" -o "$temp"
+
+    wasm-opt "$temp" -g -Os -o "$temp"
+    cp -f "$temp" "$debug"
     wasm-strip "$temp"
+
     mv -f "$temp" "$dest"
 else
     echo "Could not do optimizing pass"

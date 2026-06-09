@@ -5,12 +5,12 @@ from helpers.parse_decompiled import *
 from helpers.files import *
 
 print('Getting debug info')
-if not os.path.isfile(file_wasm_unoptimized):
-    print(f'Could not find {file_wasm_unoptimized}', file=sys.stderr)
+if not os.path.isfile(file_wasm_debug):
+    print(f'Could not find {file_wasm_debug}', file=sys.stderr)
     exit(1)
 try:
     decompiled = subprocess.run(
-        f'wasm-decompile "{file_wasm_unoptimized}"',
+        f'wasm-decompile "{file_wasm_debug}"',
         stdout=subprocess.PIPE,
         check=True
     ).stdout
@@ -22,7 +22,7 @@ except FileNotFoundError:
     exit(1)
 try:
     dwarf = subprocess.run(
-        f'llvm-dwarfdump "{file_wasm_unoptimized}"',
+        f'llvm-dwarfdump "{file_wasm_debug}"',
         stdout=subprocess.PIPE,
         check=False
     ).stdout
@@ -69,6 +69,7 @@ for var in exported_vars:
     module_contents.append(f'/**\n * {'\n * '.join(doc)}\n */')
     module_contents.append(f'readonly {var.link_name}: number;')
 
+# Generate function defs
 for func in exported_funcs:
     doc = []
     if func.WASM_type:
@@ -91,7 +92,7 @@ for func in exported_funcs:
                 func.params) == len(func_info.params) + 1:
             param_assignment.append((func.params[0].link_name,
                                      DwarfParam('<RVO return value>',
-                                                func_info.return_type)))
+                                                '&mut ' + func_info.return_type)))
             param_assignment.extend(
                 zip((p.link_name for p in func.params[1:]), func_info.params))
 
@@ -139,5 +140,32 @@ with open(file_ts_defs, 'w') as out:
     ''.join('    ' + line + '\n' for line in module_contents_str.split('\n'))
     }}}\n// noinspection JSUnusedGlobalSymbols\nexport default module;'
     out.write(module_str)
+
+with open(file_wasm_decompiled, 'w') as out:
+    def replace_mangled(match: re.Match[str]) -> str:
+        function_name = match.group(1)
+
+        # wasm-decompile chops names at 100 chars and may add disambiguation
+        # characters afterward. To make sure we don't discard disambiguation,
+        # only match on the first 100 chars
+        function_name, disambiguation = function_name[:100], function_name[100:]
+
+        if function_name in dwarf_funcs:
+            function_name = dwarf_funcs[function_name].name
+            # Quote non-alphanumeric names
+            if re.match(r'.*\W.*', function_name):
+                function_name = f'"{function_name}"'
+
+        # Add disambiguation chars back in
+        function_name += disambiguation
+
+        return function_name + match.group(2)
+
+
+    out.write(re.sub(
+        fr'\b(\w+)(\s*\()',
+        replace_mangled,
+        decompiled_text
+    ))
 
 print('Done')

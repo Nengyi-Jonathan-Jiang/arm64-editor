@@ -30,6 +30,11 @@ IF %ERRORLEVEL%==0 (
 command = "python"
 args = ["./scripts/ts-defs.py"]
 
+[tasks.decompile]
+script = """
+wasm-decompile "./pkg/simulator.debug.wasm" > ./pkg/simulator.wasm.decompiled.txt
+"""
+
 [tasks.all]
 dependencies = ["build", "pkg", "ts-defs"]
 

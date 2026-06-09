@@ -3,10 +3,17 @@ export const module : {
     
     /**
      * - WASM type: `int`
-     * - Rust name: `PARAMS_VOLATILE`
-     * - Rust type: `core::mem::maybe_uninit::MaybeUninit<simulator::params::SimulatorParams>`
+     * - Rust name: `PANIC_MSG`
+     * - Rust type: `u8[1024]`
      */
-    readonly params_ptr: number;
+    readonly panicBuffer: number;
+    
+    /**
+     * - WASM type: `int`
+     * - Rust name: `VOLATILE_PARAMS`
+     * - Rust type: `simulator::params::SimulatorParams`
+     */
+    readonly paramsPtr: number;
     
     /**
      * - WASM type: `int`
@@ -15,24 +22,42 @@ export const module : {
     
     /**
      * - WASM type: `int`
+     * - Rust name: `SIMULATOR`
+     * - Rust type: `simulator::wasm::wasm_mutex::Mutex<core::option::Option<simulator::components::Simulator>>`
+     */
+    readonly simulatorPtr: number;
+    
+    /**
+     * - WASM type: `int`
+     * - Rust name: `PANIC_MSG_BUFFER_LEN`
+     * - Rust type: `usize`
+     */
+    readonly panicBufferLen: number;
+    
+    /**
+     * - WASM type: `int`
      */
     readonly data_end: number;
     
     /**
-     * - Return type: `int`
-     * - Rust return type: `() *`
-     * - Rust name: `append`
+     * - Rust return type: `simulator::components::Simulator`
+     * - Rust name: `alloc_simulator`
      * @param a
-     *      - WASM type: `int`
-     *      - Rust type: `usize`
-     *      - Rust name: `num_bytes`
+     *      - Converted from RVO return value
+     *      - WASM type: `int_ptr`
+     *      - Rust type: `&mut simulator::components::Simulator`
      */
-    append(a: number): number;
+    allocSimulator(a: number): void;
     
     /**
-     * - Rust name: `init_simulator`
+     * - Rust name: `clear_panic_message`
      */
-    initSimulator(): void;
+    clearPanicBuffer(): void;
+    
+    /**
+     * - Rust name: `update_simulator_params`
+     */
+    updateParams(): void;
 }
 // noinspection JSUnusedGlobalSymbols
 export default module;

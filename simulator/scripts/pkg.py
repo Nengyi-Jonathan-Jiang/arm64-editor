@@ -13,12 +13,12 @@ if len(files) == 0:
 
 files.sort(key=lambda file: os.path.getmtime(file), reverse=True)
 
-shutil.copyfile(files[0], file_wasm_unoptimized)
-shutil.copyfile(file_wasm_unoptimized, file_wasm_temp)
+shutil.copyfile(files[0], file_wasm_debug)
 
 print("Optimizing wasm")
 
-subprocess.run(['wasm-opt', '-O', file_wasm_temp, '-o', file_wasm_temp])
+subprocess.run(['wasm-opt', file_wasm_debug, '-g', '-O4', '-o', file_wasm_debug])
+shutil.copyfile(file_wasm_debug, file_wasm_temp)
 subprocess.run(['wasm-strip', file_wasm_temp])
 
-shutil.move(file_wasm_temp, file_wasm_optimized)
+shutil.move(file_wasm_temp, file_wasm)

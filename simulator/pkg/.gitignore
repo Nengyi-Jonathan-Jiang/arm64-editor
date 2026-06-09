@@ -1,1 +1,2 @@
-simulator.unoptimized.wasm
+simulator.debug.wasm
+simulator.wasm.decompiled.txt

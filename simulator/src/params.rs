@@ -3,8 +3,7 @@
 pub struct SimulatorParams {
     pub cache_params: CacheParams,
     pub pipeline_params: PipelineParams,
-    pub cycle_times: CycleTimeParams,
-    pub branch_prediction: BranchPredictionParams,
+    pub branch_prediction: BranchPredictorParams,
 }
 
 #[repr(C, packed)]
@@ -22,6 +21,8 @@ pub struct CacheParams {
 #[derive(Copy, Clone)]
 pub struct PipelineParams {
     pub pipeline_mode: PipelineMode,
+
+    pub cycle_times: CycleTimeParams,
 }
 
 #[repr(C, packed)]
@@ -33,7 +34,7 @@ pub struct CycleTimeParams {
 
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
-pub struct BranchPredictionParams {
+pub struct BranchPredictorParams {
     pub bht_size_log: u8,
     pub dynamic_predictor: DynamicBranchPredictor,
     pub static_mode: StaticBranchPredictionMode,

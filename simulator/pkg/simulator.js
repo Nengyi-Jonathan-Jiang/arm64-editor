@@ -29,6 +29,52 @@ const WASM_instantiate_result = await WebAssembly.instantiateStreaming(
     }
 );
 
-export const WASM_simulator = WASM_instantiate_result.instance.exports;
-// noinspection JSUnusedGlobalSymbols
+const raw_module = WASM_instantiate_result.instance.exports;
+
+/** @type {typeof WASM_simulator} */
+const module = {};
+
+/**
+ * @template {Function} T
+ * @param {T} f
+ * @returns {T}
+ */
+function catch_wasm(f) {
+    return (...args) => {
+        try {
+            f(...args)
+        } catch (e) {
+            if (e instanceof WebAssembly.RuntimeError
+                && e.message === "unreachable") {
+                const panicMessageBytes = module.memory.buffer.slice(
+                    module.panicBuffer,
+                    module.panicBuffer + module.panicBufferLen
+                );
+                const panicMessage = new TextDecoder()
+                    .decode(panicMessageBytes)
+                    .split('\0')
+                    [0] ?? 'unknown reason';
+
+                module.clearPanicBuffer();
+
+                // noinspection JSCheckFunctionSignatures
+                throw new Error(`${panicMessage}`, {cause: e});
+            }
+            throw e;
+        }
+    }
+}
+
+for (const key in raw_module) {
+    const entry = raw_module[key];
+    if (typeof entry === 'function') {
+        module[key] = catch_wasm(entry);
+    } else {
+        module[key] = entry;
+    }
+}
+
+Object.freeze(module);
+
+export const WASM_simulator = module;
 export default WASM_simulator;

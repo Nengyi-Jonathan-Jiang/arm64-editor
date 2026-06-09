@@ -1,14 +1,5 @@
 import module from '@simulator';
 
-// let {
-//         simulatorRegistersPtr,
-//         simulatorMemoryPtr,
-//         simulatorPipelineStagesPtr,
-//         simulatorCachePtr,
-//     } = module.init(Simulator.getDefaultSimulatorParams());
-export const paramsPtr = module.params_ptr;
-console.log(module.memory, paramsPtr)
-
 export namespace Simulator {
     export enum CachePolicy {
         LRU  = 0,
@@ -60,15 +51,31 @@ export namespace Simulator {
             staticMode: StaticBranchPredictionMode;
         }
     };
+}
+
+export namespace Simulator {
+    console.log(module, module.memory);
+    (window as any)['module'] = module;
+    console.log(new Uint8Array(
+        module.memory.buffer.slice(
+            module.simulatorPtr,
+            module.simulatorPtr + 1024,
+        ),
+    ));
+
+    type RegisterName = string | number;
 
     export function simulatorStep () {
         throw new Error("TODO");
     }
 
-    export function simulatorRawRegisterBytes (): DataView {
+    export function simulatorRegisters (): Map<RegisterName, DataView>[] {
         throw new Error("TODO");
     }
 
+    export function simulatorBranchPredictorTable (): Map<number, DataView> {
+        throw new Error("TODO");
+    }
 
     export function getDefaultSimulatorParams (): SimulatorParams {
         return {

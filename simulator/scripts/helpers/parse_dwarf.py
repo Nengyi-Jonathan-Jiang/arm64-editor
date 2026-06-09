@@ -45,9 +45,11 @@ def parse_dwarf(dwarf: str) -> tuple[list[DwarfVariable], list[DwarfFunction]]:
     for def_tag, def_lines in defs_raw:
         # Get basic info
         header_lines = _get_header(def_lines)
-        if def_tag == _TAG_FUNC and header_lines[
-            0].strip() == 'DW_AT_low_pc\t(dead code)':
-            continue  # Dead code, cannot be an export
+        if (
+                def_tag == _TAG_FUNC
+                and header_lines[0].strip() == 'DW_AT_low_pc\t(dead code)'
+        ):
+            continue
 
         header_info = dict(_find_objs([
             _AT_LINK_NAME,
@@ -58,13 +60,13 @@ def parse_dwarf(dwarf: str) -> tuple[list[DwarfVariable], list[DwarfFunction]]:
             _AT_FRAME
         ], header_lines))
 
-        if _AT_EXTERNAL not in header_info:
-            continue
-        if def_tag == _TAG_FUNC:
-            if _AT_INLINE in header_info:
-                continue
-            if _AT_FRAME not in header_info:
-                continue
+        # if _AT_EXTERNAL not in header_info:
+        #     continue
+        # if def_tag == _TAG_FUNC:
+        #     if _AT_INLINE in header_info:
+        #         continue
+        # if _AT_FRAME not in header_info:
+        #     continue
 
         if _AT_NAME not in header_info:
             continue
@@ -83,6 +85,8 @@ def parse_dwarf(dwarf: str) -> tuple[list[DwarfVariable], list[DwarfFunction]]:
 
         if linkage_name is None or name is None or export_type is None:
             continue
+
+        linkage_name = _cleanup_link_name(linkage_name)
 
         # Handle method
         if def_tag == _TAG_FUNC:
@@ -109,6 +113,25 @@ def parse_dwarf(dwarf: str) -> tuple[list[DwarfVariable], list[DwarfFunction]]:
     return variables, methods
 
 
+def _cleanup_link_name(s: str) -> str:
+    # Fix names to match wasm-decompile output
+    # See include/wabt/decompiler-naming.h in github.com/WebAssembly/wabt/
+
+    # Non-alphanumeric characters become underscores
+    s = re.sub(r'\W', '_', s)
+    # Collapse consecutive underscores
+    s = re.sub(r'_+', '_', s)
+    # Remove leading and trailing underscores
+    s = re.sub(r'\b_|_\b', '', s)
+
+    # Chop to 100 characters
+    s = s[:100]
+
+    # TODO: wabt further disambiguates names, implement that too if necessary
+
+    return s
+
+
 def _parse_string_attribute(s: str) -> str | None:
     """
     Parse an attribute of the format ``(<address>? "<string>")``
@@ -118,8 +141,9 @@ def _parse_string_attribute(s: str) -> str | None:
     )
     if match is None:
         return None
-    # Fix names to match wasm-decompile output
-    return re.sub(r'\b_|___', '', match.group(1))
+    res = match.group(1)
+
+    return res
 
 
 def _get_header(lines: list[str]):
