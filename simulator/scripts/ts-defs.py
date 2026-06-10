@@ -1,8 +1,9 @@
-import subprocess, sys, os
+import subprocess, sys, os, re
 
 from helpers.parse_dwarf import *
 from helpers.parse_decompiled import *
 from helpers.files import *
+from scripts.helpers.rust_type_util import *
 
 print('Getting debug info')
 if not os.path.isfile(file_wasm_debug):
@@ -33,21 +34,73 @@ except FileNotFoundError:
     )
     dwarf = None
 
-print('Analyzing')
+print('Analyzing decompiled')
 
 decompiled_text = decompiled.decode('utf-8')
 exported_vars, exported_funcs = parse_decompiled(decompiled_text)
 
-dwarf_vars: dict[str, DwarfVariable] = {}
-dwarf_funcs: dict[str, DwarfFunction] = {}
-
+dwarf_parser = DwarfParser()
 if dwarf is not None:
+    print('Parsing dwarf')
     dwarf_text = dwarf.decode('utf-8')
-    dwarf_text = re.sub(r'^0x[0-9a-fA-F]{8}:', ' ' * 11, dwarf_text,
-                        flags=re.RegexFlag.M)
-    dwarf_vars_list, dwarf_funcs_list = parse_dwarf(dwarf_text)
-    dwarf_vars = {v.link_name: v for v in dwarf_vars_list}
-    dwarf_funcs = {f.link_name: f for f in dwarf_funcs_list}
+
+    # DEBUG ONLY: write dwarfdump output to a file to inspect
+    with open(f'./pkg/{basename}.dwarfdump.txt', 'w') as f:
+        prettified = DwarfParser.preprocess_file(dwarf_text)
+        # Remove excess indentation
+        prettified = ('\n' + prettified).replace('\n' + ' ' * 12, '\n')[1:]
+        # Remove NULL
+        prettified = prettified.replace(' NULL\n', '')
+        # Remove trailing whitespace
+        prettified = re.sub(r'[ \t]*\n', '\n', prettified)
+        # Remove excess lines
+        prettified = re.sub(r'\n\n+', '\n\n', prettified)
+        f.write(prettified)
+
+    dwarf_parser.parse(dwarf_text)
+
+    print('Analyzing dwarf')
+
+dwarf_vars = {
+    v.link_name: v
+    for v in dwarf_parser.exported_variables
+}
+
+dwarf_funcs = {
+    f.link_name: f
+    for f in dwarf_parser.exported_functions
+}
+
+dwarf_types: dict[str, DType] = {
+    (f'{i.namespace}::{i.name}' if i.namespace else i.name): i
+    for i in dwarf_parser.types
+}
+
+referenced_types: set[str] = set()
+for f in dwarf_vars.values():
+    t = f.type
+    if not t: continue
+    t = get_referenced_type(t)
+    if not t: continue
+    referenced_types.add(t)
+for v in dwarf_funcs.values():
+    for t in [
+        *(i.type for i in v.params),
+        *([v.return_type] if v.return_type else [])
+    ]:
+        if not t: continue
+        t = get_referenced_type(t)
+        if not t: continue
+        referenced_types.add(t)
+
+print('\n'.join(sorted(referenced_types)))
+
+changed = True
+while changed:
+    changed = False
+    for t in list(referenced_types):
+        if t not in dwarf_types:
+            print('Unknown type:', t)
 
 print('Generating defs')
 
@@ -55,6 +108,7 @@ module_contents: list[str] = [
     '',
     'readonly memory: WebAssembly.Memory;'
 ]
+aux_contents: list[str] = []
 
 # Generate variable defs
 for var in exported_vars:
@@ -87,12 +141,14 @@ for func in exported_funcs:
             doc.append(f'- Rust return type: `{func_info.return_type}`')
         doc.append(f'- Rust name: `{func_info.name}`')
 
-        param_assignment: list[tuple[str, DwarfParam]] = []
+        param_assignment: list[tuple[str, DInnerVar]] = []
         if not func.WASM_type and func_info.return_type != '()' and len(
-                func.params) == len(func_info.params) + 1:
-            param_assignment.append((func.params[0].link_name,
-                                     DwarfParam('<RVO return value>',
-                                                '&mut ' + func_info.return_type)))
+            func.params) == len(func_info.params) + 1:
+            param_assignment.append((
+                func.params[0].link_name,
+                DInnerVar('<RVO return value>',
+                          '&mut ' + func_info.return_type)
+            ))
             param_assignment.extend(
                 zip((p.link_name for p in func.params[1:]), func_info.params))
 
@@ -131,15 +187,93 @@ for func in exported_funcs:
         };'
     )
 
+# Generate type list
+generated_type_obj_names: dict[str, str] = {}
+for id, type in enumerate(dwarf_types.keys()):
+    v = type
+    v = v.replace('*', '_ptr_')
+    v = v.replace('&', '_ref_')
+
+    v = re.sub(r'\b(\w+::)', '', v)
+    v = re.sub(r'[^a-zA-Z0-9_]', '_', v)
+    v = re.sub(r'_+', '_', v)
+    v = re.sub(r'\b_|_\b', '', v)
+    if v in generated_type_obj_names.values():
+        v = f'{v}${id}'
+
+    generated_type_obj_names[type] = f'{v}'
+
+for id, (fullname, type) in enumerate(dwarf_types.items()):
+
+    doc = [
+        f'- Name: `{re.sub(r'\b(\w+::)', '', type.name)}`',
+        f'- Size: `{type.size}`',
+    ]
+
+    if len(type.members):
+        doc.append('')
+        doc.append('Fields:')
+
+        field_table_entries: list[tuple[str, str, str]] = [
+            ('Name', '@', 'Type')
+        ]
+
+        for offset, member in type.members:
+            type = '' if member.type is None else member.type
+            name = '?' if member.name is None else member.name
+
+            u = get_referenced_type(type)
+            if u is not None and u in generated_type_obj_names:
+                type = f'{{@link {generated_type_obj_names[u]} `{type}`}}'
+            else:
+                type = f'`{type}`'
+
+            type = re.sub(r'\b(\w+::)', '', type)
+
+            name = re.sub(r'\b(\w+::)', '', name)
+            name = f'`{name}`'
+            offset = f'`{offset}`'
+
+            field_table_entries.append((name, offset, type))
+
+        col_1_w = max(len(i[0]) for i in field_table_entries)
+        col_2_w = max(len(i[1]) for i in field_table_entries)
+        col_3_w = max(len(i[2]) for i in field_table_entries)
+
+        for entry in field_table_entries:
+            doc.append(
+                f'| {entry[0]:{col_1_w}} | {entry[1]:{col_2_w}} | {entry[2]:{col_3_w}} |'
+            )
+        doc.insert(
+            1 - len(field_table_entries),
+            f'| {"-" * col_1_w} | {"-" * col_2_w} | {"-" * col_3_w} |'
+        )
+
+    aux_contents.append('')
+    aux_contents.append(f'/**\n * {'\n * '.join(doc)}\n */')
+    aux_contents.append(f'type {generated_type_obj_names[fullname]} = never;')
+
 print('Writing to file')
 
 with open(file_ts_defs, 'w') as out:
     module_contents_str = '\n'.join(module_contents)
+    aux_contents_str = '\n'.join(aux_contents)
+
+    header_str = '// noinspection JSUnusedGlobalSymbols'
 
     module_str = f'export const module : {{{
     ''.join('    ' + line + '\n' for line in module_contents_str.split('\n'))
-    }}}\n// noinspection JSUnusedGlobalSymbols\nexport default module;'
-    out.write(module_str)
+    }}}'
+
+    aux_str = f'export namespace types {{{
+    ''.join('    ' + line + '\n' for line in aux_contents_str.split('\n'))
+    }}}'
+
+    footer_str = 'export default module;'
+
+    out.write('\n\n'.join([
+        header_str, module_str, aux_str, footer_str
+    ]))
 
 with open(file_wasm_decompiled, 'w') as out:
     def replace_mangled(match: re.Match[str]) -> str:
@@ -163,7 +297,8 @@ with open(file_wasm_decompiled, 'w') as out:
 
 
     out.write(re.sub(
-        fr'\b(\w+)(\s*\()',
+        # Only match what appear to be actual function calls or definitions
+        fr'\b(\w+)( *\()',
         replace_mangled,
         decompiled_text
     ))

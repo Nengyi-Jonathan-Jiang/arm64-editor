@@ -1,2 +1,3 @@
-simulator.debug.wasm
-simulator.wasm.decompiled.txt
+*.debug.wasm
+*.wasm.decompiled.txt
+*.dwarfdump.txt

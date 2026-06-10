@@ -1,30 +1,40 @@
 # Build Requirements
 
 Required:
+
 - Rust and `cargo`
 - `wabt` (for WebAssembly-specific optimization passes)
 - Either `bash` or `python` (used by build scripts)
 
 Optional:
-- `python` to regenerate TypeScript definitions
-- [`llvm-dwarfdump`](https://github.com/llvm) enables generation of more detailed TypeScript type 
-  information
-- [`cargo make`](https://github.com/sagiegurari/cargo-make) to run the full build with one command
+
+- `python` to regenerate TypeScript definitions. This is highly recommended for
+  reasons described below
+- [`llvm-dwarfdump`](https://github.com/llvm) enables generation of more
+  detailed TypeScript type
+  information. This is also highly recommended for the same reason
+- [`cargo make`](https://github.com/sagiegurari/cargo-make) to run the full
+  build with one command
 
 # Building
 
-### Using Cargo Make 
+It is never required to rebuild the project to use this project since the
+generated artifacts are checked into the repository. If you wish to build the
+code manually, you must consider the possibility that type layouts may change
+and invalidate JS-side interop code.
+
+## Using Cargo Make
 
 If Cargo Make is installed, run:
 `cargo make all`
 
-### Manual
+## Building Manually
 
 If Cargo Make is not available, perform the build steps manually:
 
 #### 1. Compile the Rust crate to WebAssembly
 
-Build for the `wasm32-unknown-unknown` target using either the `dev` profile or 
+Build for the `wasm32-unknown-unknown` target using either the `dev` profile or
 the custom `wasm` profile:
 
 ```bash
@@ -37,13 +47,15 @@ cargo build --target wasm32-unknown-unknown --profile wasm
 bash ./scripts/pkg.sh
 ```
 
-This runs WebAssembly-specific optimization passes provided by WABT and copies 
+This runs WebAssembly-specific optimization passes provided by WABT and copies
 the generated artifacts into the directory structure expected by webpack
 
-#### 3. Regenerate TypeScript definitions (optional)
+#### 3. Regenerate TypeScript definitions (optional, recommended)
 
-If exported WASM functions, globals, or types have changed, regenerate the 
-TypeScript bindings:
+It is highly recommended to regenerate the TypeScript bindings whenever Rust
+code is recompiled. This is because generated TypeScript definitions expose
+type *layout* information that aids greatly in checking the correctness of
+JS-side interop code that needs to access raw WebAssembly memory.
 
 ```bash
 python ./scripts/ts-defs.py

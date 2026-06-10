@@ -54,9 +54,11 @@ export namespace Simulator {
 }
 
 export namespace Simulator {
+    module.allocSimulator(module.simulatorPtr);
+
     console.log(module, module.memory);
     (window as any)['module'] = module;
-    console.log(new Uint8Array(
+    console.log(new Uint32Array(
         module.memory.buffer.slice(
             module.simulatorPtr,
             module.simulatorPtr + 1024,
