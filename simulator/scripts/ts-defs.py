@@ -1,9 +1,11 @@
-import subprocess, sys, os, re
+import os
+import subprocess
+import sys
 
-from helpers.parse_dwarf import *
-from helpers.parse_decompiled import *
 from helpers.files import *
-from scripts.helpers.rust_type_util import *
+from helpers.parse_decompiled import *
+from helpers.parse_dwarf import *
+from scripts.helpers.type_util import *
 
 print('Getting debug info')
 if not os.path.isfile(file_wasm_debug):
@@ -76,14 +78,26 @@ dwarf_types: dict[str, DType] = {
     for i in dwarf_parser.types
 }
 
+dyn_impls: dict[str, list[str]] = {}
+for type in dwarf_types.values():
+    match = re.fullmatch(
+        r'<([^ ]+) as ([^ ]+)>::\{vtable_type}',
+        type.name
+    )
+    if match:
+        dyn_impls.setdefault(match.group(2), []).append(match.group(1))
+
 referenced_types: set[str] = set()
-for f in dwarf_vars.values():
-    t = f.type
+for var in exported_vars:
+    if var.link_name not in dwarf_vars: continue
+    t = dwarf_vars[var.link_name].type
     if not t: continue
     t = get_referenced_type(t)
     if not t: continue
     referenced_types.add(t)
-for v in dwarf_funcs.values():
+for func in exported_funcs:
+    if func.link_name not in dwarf_funcs: continue
+    v = dwarf_funcs[func.link_name]
     for t in [
         *(i.type for i in v.params),
         *([v.return_type] if v.return_type else [])
@@ -93,14 +107,47 @@ for v in dwarf_funcs.values():
         if not t: continue
         referenced_types.add(t)
 
-print('\n'.join(sorted(referenced_types)))
+for m in referenced_types:
+    print(f'Found new type {m}')
 
-changed = True
+changed = referenced_types
 while changed:
-    changed = False
-    for t in list(referenced_types):
+    print(f'Closure cycle (found {len(referenced_types)} so far)')
+    edge = list(changed)
+    changed = set()
+    for t in edge:
         if t not in dwarf_types:
-            print('Unknown type:', t)
+            continue
+
+        # Include trait instantiations through dyn
+        if re.fullmatch(r'dyn .*', t):
+            trait = t[3:].strip()
+            if trait not in dyn_impls:
+                print('Unknown trait object', trait)
+                continue
+            for m in dyn_impls[trait]:
+                if m in referenced_types: continue
+                referenced_types.add(m)
+                changed.add(m)
+                print(f'Found new type {m}')
+            continue
+
+        for _, i in dwarf_types[t].members:
+            m = i.type
+
+            if m is None: continue
+            m = get_referenced_type(m)
+            if m is None: continue
+
+            if m in referenced_types: continue
+
+            referenced_types.add(m)
+            changed.add(m)
+            print(f'Found new type {m}')
+
+dwarf_types = {
+    k: v for k, v in dwarf_types.items() if k in referenced_types
+}
 
 print('Generating defs')
 
@@ -110,6 +157,25 @@ module_contents: list[str] = [
 ]
 aux_contents: list[str] = []
 
+generated_type_obj_names: dict[str, str] = {}
+for id, type in enumerate(dwarf_types.keys()):
+    v = type_to_alphanumeric(type)
+    if v in generated_type_obj_names.values() or v in typescript_reserved_words:
+        v = f'{v}${id}'
+
+    generated_type_obj_names[type] = f'{v}'
+
+
+def quote_type(type_name: str) -> str:
+    referenced = get_referenced_type(type_name)
+    type_name = simplify_type_name(type_name)
+    if referenced is not None and referenced in generated_type_obj_names:
+        referenced = generated_type_obj_names[referenced]
+        return f'{{@link {referenced} `{type_name}`}}'
+    else:
+        return f'`{type_name}`'
+
+
 # Generate variable defs
 for var in exported_vars:
     doc = [f'- WASM type: `{var.WASM_type}`']
@@ -117,7 +183,7 @@ for var in exported_vars:
     if var.link_name in dwarf_vars:
         var_info = dwarf_vars[var.link_name]
         doc.append(f'- Rust name: `{var_info.name}`')
-        doc.append(f'- Rust type: `{var_info.type}`')
+        doc.append(f'- Rust type: {quote_type(var_info.type)}')
 
     module_contents.append('')
     module_contents.append(f'/**\n * {'\n * '.join(doc)}\n */')
@@ -127,7 +193,7 @@ for var in exported_vars:
 for func in exported_funcs:
     doc = []
     if func.WASM_type:
-        doc.append(f'- Return type: `{func.WASM_type}`')
+        doc.append(f'- Return type: {quote_type(func.WASM_type)}')
 
     param_docs: dict[str, list[str]] = {
         param.link_name: [
@@ -138,7 +204,8 @@ for func in exported_funcs:
     if func.link_name in dwarf_funcs:
         func_info = dwarf_funcs[func.link_name]
         if func_info.return_type:
-            doc.append(f'- Rust return type: `{func_info.return_type}`')
+            doc.append(
+                f'- Rust return type: {quote_type(func_info.return_type)}')
         doc.append(f'- Rust name: `{func_info.name}`')
 
         param_assignment: list[tuple[str, DInnerVar]] = []
@@ -146,8 +213,10 @@ for func in exported_funcs:
             func.params) == len(func_info.params) + 1:
             param_assignment.append((
                 func.params[0].link_name,
-                DInnerVar('<RVO return value>',
-                          '&mut ' + func_info.return_type)
+                DInnerVar(
+                    '<RVO return value>',
+                    f'&mut {func_info.return_type}'
+                )
             ))
             param_assignment.extend(
                 zip((p.link_name for p in func.params[1:]), func_info.params))
@@ -162,7 +231,8 @@ for func in exported_funcs:
 
         for param_name, param_info in param_assignment:
             if param_info.type is not None:
-                param_docs[param_name].append(f'Rust type: `{param_info.type}`')
+                param_docs[param_name].append(
+                    f'Rust type: {quote_type(param_info.type)}')
             if param_info.name == '<RVO return value>':
                 param_docs[param_name].insert(
                     0,
@@ -188,21 +258,6 @@ for func in exported_funcs:
     )
 
 # Generate type list
-generated_type_obj_names: dict[str, str] = {}
-for id, type in enumerate(dwarf_types.keys()):
-    v = type
-    v = v.replace('*', '_ptr_')
-    v = v.replace('&', '_ref_')
-
-    v = re.sub(r'\b(\w+::)', '', v)
-    v = re.sub(r'[^a-zA-Z0-9_]', '_', v)
-    v = re.sub(r'_+', '_', v)
-    v = re.sub(r'\b_|_\b', '', v)
-    if v in generated_type_obj_names.values():
-        v = f'{v}${id}'
-
-    generated_type_obj_names[type] = f'{v}'
-
 for id, (fullname, type) in enumerate(dwarf_types.items()):
 
     doc = [
@@ -222,15 +277,11 @@ for id, (fullname, type) in enumerate(dwarf_types.items()):
             type = '' if member.type is None else member.type
             name = '?' if member.name is None else member.name
 
-            u = get_referenced_type(type)
-            if u is not None and u in generated_type_obj_names:
-                type = f'{{@link {generated_type_obj_names[u]} `{type}`}}'
-            else:
-                type = f'`{type}`'
+            type = quote_type(type)
 
-            type = re.sub(r'\b(\w+::)', '', type)
+            type = simplify_type_name(type)
+            name = simplify_type_name(name)
 
-            name = re.sub(r'\b(\w+::)', '', name)
             name = f'`{name}`'
             offset = f'`{offset}`'
 
@@ -249,9 +300,17 @@ for id, (fullname, type) in enumerate(dwarf_types.items()):
             f'| {"-" * col_1_w} | {"-" * col_2_w} | {"-" * col_3_w} |'
         )
 
+    if fullname.startswith('dyn '):
+        trait = fullname[3:].strip()
+        if trait in dyn_impls:
+            doc.append('')
+            doc.append(f'Implementations: {
+                ', '.join(quote_type(i) for i in dyn_impls[trait])
+            }')
+
     aux_contents.append('')
     aux_contents.append(f'/**\n * {'\n * '.join(doc)}\n */')
-    aux_contents.append(f'type {generated_type_obj_names[fullname]} = never;')
+    aux_contents.append(f'type {generated_type_obj_names[fullname]} = any;')
 
 print('Writing to file')
 
