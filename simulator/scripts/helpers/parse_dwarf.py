@@ -28,6 +28,7 @@ class DType:
 
     namespace: str
 
+
 @dataclass
 class DInnerVar:
     name: str | None
@@ -66,11 +67,17 @@ class DwarfParser:
         dwarf = re.sub(r'^0x[0-9a-fA-F]{8}: ', ' ' * 12, dwarf,
                        flags=re.RegexFlag.M)
 
+        # Collapse empty lines
+        dwarf = re.sub(r'\s+\n', '\n', dwarf)
+
         return dwarf
 
     def parse(self, dwarf: str):
         dwarf = self.preprocess_file(dwarf)
+        # Remove empty lines
+        dwarf = re.sub(r'\n+', '\n', dwarf)
         lines = dwarf.splitlines()
+        lines = list(map(_split_indent, lines))
         tree = _parse_tree('root', lines)
 
         self.visit(tree, '')
@@ -208,6 +215,11 @@ class DwarfParser:
         return name, link_name, type
 
 
+def _split_indent(line: str) -> tuple[int, str]:
+    unindented = line.lstrip()
+    return len(line) - len(unindented), unindented.rstrip()
+
+
 def _cleanup_link_name(s: str) -> str:
     # Fix names to match wasm-decompile output
     # See include/wabt/decompiler-naming.h in github.com/WebAssembly/wabt/
@@ -273,54 +285,51 @@ class _ParseNode:
     children: list[_ParseNode]
 
 
-def _get_indent(s: str) -> int:
-    for i in range(len(s)):
-        if s[i] != ' ':
-            return i
-    return len(s)
+from line_profiler_pycharm import profile
 
 
-def _parse_tree(tag_name: str, lines: list[str]) -> _ParseNode:
-    attributes: dict[str, str] = {}
-    children: list[_ParseNode] = []
-
+@profile
+def _parse_tree(root_tag_name: str, lines: list[tuple[int, str]]) -> _ParseNode:
     line_index = 0
-    while line_index < len(lines):
-        line = lines[line_index]
-        line_index += 1
 
-        # Get tag/attribute name
-        line_parts = line.strip().split(maxsplit=1)
-        obj_name, rest = line_parts if len(line_parts) == 2 else (line, '')
-        obj_name, rest = obj_name.strip(), rest.strip()
+    @profile
+    def parse_node(base_indent: int, tag_name: str) -> _ParseNode:
+        nonlocal line_index
 
-        # Figure out what kind of object we have
-        if obj_name.startswith('DW_TAG'):
-            is_tag = True
-        elif obj_name.startswith('DW_AT'):
-            is_tag = False
-        else:
-            continue
+        attributes: dict[str, str] = {}
+        children: list[_ParseNode] = []
 
-        # Get rest of object (need to track indentation)
-        initial_indent = _get_indent(line)
-        section_lines: list[str] = [rest] if rest else []
         while line_index < len(lines):
-            line = lines[line_index]
-            if line.strip() != '' and _get_indent(line) <= initial_indent:
+            indent, line = lines[line_index]
+            if indent <= base_indent:
                 break
-            section_lines.append(line[initial_indent:])
             line_index += 1
 
-        # Convert to node/attribute
-        if is_tag:
-            children.append(_parse_tree(obj_name, section_lines))
-        else:
-            attribute_value = ' '.join(section_lines)
-            attribute_value = re.sub(r'\s+', ' ', attribute_value).strip()
-            attributes[obj_name] = attribute_value
+            # Get tag/attribute name
+            line_parts = line.split(maxsplit=1)
+            obj_name, rest = line_parts if len(line_parts) == 2 else (line, '')
+            obj_name, rest = obj_name, rest
 
-    return _ParseNode(tag_name, attributes, children)
+            # Figure out what kind of object we have
+            if obj_name.startswith('DW_AT'):
+                attributes[obj_name] = parse_attr(indent, rest)
+            elif obj_name.startswith('DW_TAG'):
+                children.append(parse_node(indent, obj_name))
+
+        return _ParseNode(tag_name, attributes, children)
+
+    @profile
+    def parse_attr(base_indent: int, attr_value: str) -> str:
+        nonlocal line_index
+        while line_index < len(lines):
+            indent, line = lines[line_index]
+            if indent <= base_indent:
+                break
+            line_index += 1
+            attr_value += ' ' + line
+        return attr_value if attr_value[0] != ' ' else attr_value[1:]
+
+    return parse_node(-2, root_tag_name)
 
 
 if __name__ == '__main__':
