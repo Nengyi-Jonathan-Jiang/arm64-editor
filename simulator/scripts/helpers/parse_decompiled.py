@@ -2,14 +2,14 @@ import re
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class DecompiledFunction:
     link_name: str
     params: list[DecompiledVariable]
     WASM_type: str
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class DecompiledVariable:
     link_name: str
     WASM_type: str

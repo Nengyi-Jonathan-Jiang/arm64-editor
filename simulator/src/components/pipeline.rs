@@ -1,7 +1,18 @@
 use crate::components::Pipeline;
 use crate::unsafe_ref::UnsafeMutRef;
 
-pub struct DummyPipeline {}
+pub struct DummyPipeline {
+    _x: X,
+    _y: Y,
+    _y2: Y2,
+    _z: Z<Z2>,
+}
+
+struct X;
+enum Y { A }
+enum Y2 { A(Z<Y>) }
+enum Z<T: 'static> { A, B(&'static T) }
+enum Z2 { A, B(*const X) }
 
 impl DummyPipeline {
     pub fn new() -> UnsafeMutRef<dyn Pipeline> {

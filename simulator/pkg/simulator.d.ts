@@ -412,17 +412,11 @@ export namespace types {
      * - Size: `288`
      * 
      * Fields:
-     * | Name    | @   | Type                                         |
-     * | ------- | --- | -------------------------------------------- |
-     * | `value` | `0` | {@link Option_Simulator `Option<Simulator>`} |
+     * | Name    | @   | Type                |
+     * | ------- | --- | ------------------- |
+     * | `value` | `0` | `Option<Simulator>` |
      */
     type UnsafeCell_Option_Simulator = any;
-    
-    /**
-     * - Name: `Option<Simulator>`
-     * - Size: `288`
-     */
-    type Option_Simulator = any;
     
     /**
      * - Name: `dyn Pipeline`

@@ -5,7 +5,8 @@ import sys
 from helpers.files import *
 from helpers.parse_decompiled import *
 from helpers.parse_dwarf import *
-from scripts.helpers.type_util import *
+from helpers.misc_utils import *
+from helpers.typename import *
 
 print('Getting debug info')
 if not os.path.isfile(file_wasm_debug):
@@ -46,20 +47,53 @@ if dwarf is not None:
     print('Parsing dwarf')
     dwarf_text = dwarf.decode('utf-8')
 
+    tree, lookup = dwarf_parser.parse(dwarf_text)
+
+    with open(f'./pkg/{basename}.raw.dwarfdump.txt', 'w') as f:
+        f.write(dwarf_text)
+
     # DEBUG ONLY: write dwarfdump output to a file to inspect
     with open(f'./pkg/{basename}.dwarfdump.txt', 'w') as f:
-        prettified = DwarfParser.preprocess_file(dwarf_text)
-        # Remove excess indentation
-        prettified = ('\n' + prettified).replace('\n' + ' ' * 12, '\n')[1:]
-        # Remove NULL
-        prettified = prettified.replace(' NULL\n', '')
-        # Remove trailing whitespace
-        prettified = re.sub(r'[ \t]*\n', '\n', prettified)
-        # Remove excess lines
-        prettified = re.sub(r'\n\n+', '\n\n', prettified)
-        f.write(prettified)
+        str_opts = RawDwarfNode.ToStringOptions(
+            set("""
+            DW_TAG_inlined_subroutine
+            """.strip().split()),
+            set("""
+            DW_AT_containing_type
+            DW_AT_encoding
+            DW_AT_address_class
+            DW_AT_abstract_origin
+            DW_AT_low_pc         
+            DW_AT_high_pc        
+            DW_AT_call_file      
+            DW_AT_call_line      
+            DW_AT_call_column    
+            DW_AT_decl_file  
+            DW_AT_decl_line  
+            DW_AT_inline     
+            DW_AT_ranges
+            DW_AT_GNU_discriminator
+            DW_AT_external
+            DW_AT_linkage_name
+            DW_AT_frame_base
+            DW_AT_name
+            DW_AT_declaration
+            DW_AT_accessibility
+            DW_AT_noreturn
+            """.strip().split()),
+            set("""
+            DW_TAG_compile_unit
+            """.strip().split()),
+            set("""
+            DW_TAG_namespace
+            DW_TAG_subprogram
+            DW_TAG_compile_unit
+            """.strip().split())
+        )
 
-    dwarf_parser.parse(dwarf_text)
+        f.write('\n'.join(
+            i for i in (root.to_string(str_opts) for root in tree.children) if i
+        ))
 
     print('Analyzing dwarf')
 
@@ -73,13 +107,36 @@ dwarf_funcs = {
     for f in dwarf_parser.exported_functions
 }
 
-dwarf_types: dict[str, DType] = {
+dwarf_structs: dict[str, DStruct] = {
     (f'{i.namespace}::{i.name}' if i.namespace else i.name): i
-    for i in dwarf_parser.types
+    for i in dwarf_parser.structs
 }
 
+dwarf_enums: dict[str, DEnum] = {
+    (f'{i.namespace}::{i.name}' if i.namespace else i.name): i
+    for i in dwarf_parser.enums
+}
+
+with open('pkg/types_all.wasm.decompiled.txt', 'w') as f:
+    S: set[str | None] = set()
+    for func in dwarf_funcs.values():
+        S.add(func.return_type)
+        for param in func.params:
+            S.add(param.type)
+    for var in dwarf_vars.values():
+        S.add(var.type)
+    for type in dwarf_structs.values():
+        S.add(type.name)
+        for member in type.members:
+            S.add(member.type)
+    S.discard(None)
+    S.discard('')
+    S: set[str]
+    f.write('\n'.join(sorted(S)))
+    pass
+
 dyn_impls: dict[str, list[str]] = {}
-for type in dwarf_types.values():
+for type in dwarf_structs.values():
     match = re.fullmatch(
         r'<([^ ]+) as ([^ ]+)>::\{vtable_type}',
         type.name
@@ -107,46 +164,42 @@ for func in exported_funcs:
         if not t: continue
         referenced_types.add(t)
 
-for m in referenced_types:
-    print(f'Found new type {m}')
 
-changed = referenced_types
-while changed:
-    print(f'Closure cycle (found {len(referenced_types)} so far)')
-    edge = list(changed)
-    changed = set()
-    for t in edge:
-        if t not in dwarf_types:
-            continue
+def get_referenced(type_name: str) -> Generator[str | None]:
+    # Types defined in dwarf as enums
+    if type_name in dwarf_enums:
+        for enum_variant in dwarf_enums[type_name].variants:
+            if isinstance(enum_variant.type, str):
+                yield enum_variant.type
+            else:
+                yield from (i.type for i in enum_variant.type.members)
 
+    # Types defined in dwarf as structs
+    if type_name in dwarf_structs:
+        yield from (i.type for i in dwarf_structs[type_name].members)
         # Include trait instantiations through dyn
-        if re.fullmatch(r'dyn .*', t):
-            trait = t[3:].strip()
-            if trait not in dyn_impls:
-                print('Unknown trait object', trait)
-                continue
-            for m in dyn_impls[trait]:
-                if m in referenced_types: continue
-                referenced_types.add(m)
-                changed.add(m)
-                print(f'Found new type {m}')
-            continue
+        if re.fullmatch(r'dyn .*', type_name):
+            trait_name = type_name[3:].strip()
+            if trait_name in dyn_impls:
+                yield from dyn_impls[trait_name]
 
-        for _, i in dwarf_types[t].members:
-            m = i.type
 
-            if m is None: continue
-            m = get_referenced_type(m)
-            if m is None: continue
+referenced_types = closure(
+    referenced_types,
+    lambda type_name: filter_none(
+        map(get_referenced_type, filter_none(
+            get_referenced(type_name)
+        ))
+    ),
+    on_find=lambda x: print(f'Found type {x}'),
+    on_cycle=lambda: print(f'End closure cycle')
+)
 
-            if m in referenced_types: continue
-
-            referenced_types.add(m)
-            changed.add(m)
-            print(f'Found new type {m}')
-
-dwarf_types = {
-    k: v for k, v in dwarf_types.items() if k in referenced_types
+dwarf_structs = {
+    k: v for k, v in dwarf_structs.items() if k in referenced_types
+}
+dwarf_enums = {
+    k: v for k, v in dwarf_enums.items() if k in referenced_types
 }
 
 print('Generating defs')
@@ -157,9 +210,17 @@ module_contents: list[str] = [
 ]
 aux_contents: list[str] = []
 
+typescript_reserved_words = """
+any as boolean break case catch class const constructor continue debugger 
+declare default delete do else enum export extends false finally for from 
+function get if implements import in instanceof interface let module new null 
+number of package private protected public require return set static string 
+super switch symbol this throw true try type typeof var void while with yield
+""".strip().split()
+
 generated_type_obj_names: dict[str, str] = {}
-for id, type in enumerate(dwarf_types.keys()):
-    v = type_to_alphanumeric(type)
+for id, type in enumerate(dwarf_structs.keys()):
+    v = parse_typename(type).to_alphanumeric()
     if v in generated_type_obj_names.values() or v in typescript_reserved_words:
         v = f'{v}${id}'
 
@@ -168,7 +229,7 @@ for id, type in enumerate(dwarf_types.keys()):
 
 def quote_type(type_name: str) -> str:
     referenced = get_referenced_type(type_name)
-    type_name = simplify_type_name(type_name)
+    type_name = strip_namespaces(type_name)
     if referenced is not None and referenced in generated_type_obj_names:
         referenced = generated_type_obj_names[referenced]
         return f'{{@link {referenced} `{type_name}`}}'
@@ -258,7 +319,7 @@ for func in exported_funcs:
     )
 
 # Generate type list
-for id, (fullname, type) in enumerate(dwarf_types.items()):
+for id, (fullname, type) in enumerate(dwarf_structs.items()):
 
     doc = [
         f'- Name: `{re.sub(r'\b(\w+::)', '', type.name)}`',
@@ -273,17 +334,19 @@ for id, (fullname, type) in enumerate(dwarf_types.items()):
             ('Name', '@', 'Type')
         ]
 
-        for offset, member in type.members:
+        for member in type.members:
+            member: DStructMember
+
             type = '' if member.type is None else member.type
             name = '?' if member.name is None else member.name
 
             type = quote_type(type)
 
-            type = simplify_type_name(type)
-            name = simplify_type_name(name)
+            type = strip_namespaces(type)
+            name = strip_namespaces(name)
 
             name = f'`{name}`'
-            offset = f'`{offset}`'
+            offset = f'`{member.location}`'
 
             field_table_entries.append((name, offset, type))
 
@@ -305,7 +368,7 @@ for id, (fullname, type) in enumerate(dwarf_types.items()):
         if trait in dyn_impls:
             doc.append('')
             doc.append(f'Implementations: {
-                ', '.join(quote_type(i) for i in dyn_impls[trait])
+            ', '.join(quote_type(i) for i in dyn_impls[trait])
             }')
 
     aux_contents.append('')
@@ -335,8 +398,8 @@ with open(file_ts_defs, 'w') as out:
     ]))
 
 with open(file_wasm_decompiled, 'w') as out:
-    def replace_mangled(match: re.Match[str]) -> str:
-        function_name = match.group(1)
+    def replace_mangled(mangled: re.Match[str]) -> str:
+        function_name = mangled.group(1)
 
         # wasm-decompile chops names at 100 chars and may add disambiguation
         # characters afterward. To make sure we don't discard disambiguation,
@@ -352,7 +415,7 @@ with open(file_wasm_decompiled, 'w') as out:
         # Add disambiguation chars back in
         function_name += disambiguation
 
-        return function_name + match.group(2)
+        return function_name + mangled.group(2)
 
 
     out.write(re.sub(

@@ -1,46 +1,84 @@
 import re
 from dataclasses import dataclass
+from typing import Generator, Callable, Iterable, Any
+
+type_ref = str  # | tuple[str, "DType"]
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class DFunc:
     name: str
     link_name: str
-    return_type: str
+    return_type: type_ref
     params: list[DInnerVar]
     namespace: str
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class DVar:
     name: str
     link_name: str
-    type: str
+    type: type_ref
 
     namespace: str
 
 
-@dataclass
-class DType:
+@dataclass(frozen=True, eq=False)
+class DStruct:
     name: str
     size: int | None
-    members: list[tuple[int | None, DInnerVar]]
+    members: list[DStructMember]
 
     namespace: str
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
+class DStructMember:
+    location: int | None
+    name: str | None
+    type: type_ref | None
+
+
+@dataclass(frozen=True, eq=False)
+class DEnum:
+    name: str
+    size: int | None
+    discriminant: DEnumDiscriminant | None
+    variants: list[DEnumVariant]
+
+    namespace: str
+
+
+@dataclass(frozen=True, eq=False)
+class DEnumDiscriminant:
+    type: type_ref
+    location: int | None
+
+
+@dataclass(frozen=True, eq=False)
+class DEnumVariant:
+    discriminant: int | None
+    type: DStruct | str
+    location: int | None
+
+
+@dataclass(frozen=True, eq=False)
 class DInnerVar:
     name: str | None
-    type: str | None
+    type: type_ref | None
 
+
+_TAG_NAMESPACE = 'DW_TAG_namespace'
+
+_TAG_VAR = 'DW_TAG_variable'
 
 _TAG_FUNC = 'DW_TAG_subprogram'
-_TAG_VAR = 'DW_TAG_variable'
 _TAG_PARAM = 'DW_TAG_formal_parameter'
+
 _TAG_STRUCT = 'DW_TAG_structure_type'
 _TAG_MEMBER = 'DW_TAG_member'
-_TAG_NAMESPACE = 'DW_TAG_namespace'
+_TAG_VARIANT_PART = 'DW_TAG_variant_part'
+_TAG_VARIANT = 'DW_TAG_variant'
 _TAG_ENUM = 'DW_TAG_enumeration_type'
 _TAG_ENUM_ENTRY = 'DW_TAG_enumerator'
 
@@ -51,6 +89,10 @@ _AT_LOC = 'DW_AT_location'
 
 _AT_SIZE = 'DW_AT_byte_size'
 _AT_MEMBER_LOC = 'DW_AT_data_member_location'
+_AT_ALIGNMENT = 'DW_AT_alignment'
+
+_AT_DISCR = 'DW_AT_discr'
+_AT_DISCR_VALUE = 'DW_AT_discr_value'
 
 _AT_ENUM_VALUE = 'DW_AT_const_value'
 
@@ -59,30 +101,19 @@ class DwarfParser:
     def __init__(self):
         self.exported_functions: list[DFunc] = []
         self.exported_variables: list[DVar] = []
-        self.types: list[DType] = []
+        self.structs: list[DStruct] = []
+        self.enums: list[DEnum] = []
 
-    @staticmethod
-    def preprocess_file(dwarf: str) -> str:
-        # Remove address markers
-        dwarf = re.sub(r'^0x[0-9a-fA-F]{8}: ', ' ' * 12, dwarf,
-                       flags=re.RegexFlag.M)
-
+    def parse(self, dwarf: str) -> tuple[RawDwarfNode, dict[int, RawDwarfNode]]:
         # Collapse empty lines
         dwarf = re.sub(r'\s+\n', '\n', dwarf)
+        tree, lookup = RawDwarfNode.parse('root', dwarf)
 
-        return dwarf
+        self.visit(tree)
 
-    def parse(self, dwarf: str):
-        dwarf = self.preprocess_file(dwarf)
-        # Remove empty lines
-        dwarf = re.sub(r'\n+', '\n', dwarf)
-        lines = dwarf.splitlines()
-        lines = list(map(_split_indent, lines))
-        tree = _parse_tree('root', lines)
+        return tree, lookup
 
-        self.visit(tree, '')
-
-    def visit(self, node: _ParseNode, namespace: str):
+    def visit(self, node: RawDwarfNode, namespace: str = ''):
         if node.tag == _TAG_NAMESPACE:
             namespace_name = _get_string(
                 node.attributes.get(_AT_NAME, "")
@@ -95,14 +126,18 @@ class DwarfParser:
         elif node.tag == _TAG_VAR:
             self.visit_var(node, namespace)
         elif node.tag == _TAG_STRUCT:
-            self.visit_struct(node, namespace)
+            if v := node.find(lambda x: x.tag == _TAG_VARIANT_PART):
+                self.visit_enum(node, v, namespace)
+            else:
+                if res := self.parse_struct(node, namespace):
+                    self.structs.append(res)
         elif node.tag == _TAG_ENUM:
-            self.visit_enum(node, namespace)
+            self.visit_basic_enum(node, namespace)
         else:
             for child in node.children:
                 self.visit(child, namespace)
 
-    def visit_var(self, node: _ParseNode, namespace: str):
+    def visit_var(self, node: RawDwarfNode, namespace: str):
         export_data = self.get_export_data(node)
         if export_data is None: return
 
@@ -112,7 +147,7 @@ class DwarfParser:
             DVar(name, link_name, type, namespace[2:])
         )
 
-    def visit_func(self, node: _ParseNode, namespace: str):
+    def visit_func(self, node: RawDwarfNode, namespace: str):
         # Skip dead code
         if node.attributes.get('DW_AT_low_pc') == '(dead code)':
             return
@@ -122,7 +157,7 @@ class DwarfParser:
 
         name, link_name, return_type = export_data
 
-        params_nodes = [i for i in node.children if i.tag == _TAG_PARAM]
+        params_nodes = list(node.children_matching(_TAG_PARAM))
 
         params: list[DInnerVar] = []
         for node in params_nodes:
@@ -135,65 +170,118 @@ class DwarfParser:
             DFunc(name, link_name, return_type, params, namespace[2:])
         )
 
-    def visit_struct(self, node: _ParseNode, namespace: str):
+    @staticmethod
+    def parse_struct(n: RawDwarfNode, namespace: str) -> DStruct | None:
         name, size_str = (
-            _get_string(node.attributes.get(_AT_NAME, '')),
-            _get_int(node.attributes.get(_AT_SIZE, ''))
+            _get_string(n.attributes.get(_AT_NAME, '')),
+            _get_int(n.attributes.get(_AT_SIZE, ''))
         )
 
         # Structure must have a name
         if name is None:
-            return
+            return None
 
         size = None if size_str is None else int(size_str)
 
-        members_nodes = [i for i in node.children if i.tag == _TAG_MEMBER]
+        members_nodes = list(n.children_matching(_TAG_MEMBER))
 
-        members: list[tuple[int | None, DInnerVar]] = []
-        for node in members_nodes:
-            member_name = _get_string(node.attributes.get(_AT_NAME, ""))
-            member_type = _get_string(node.attributes.get(_AT_TYPE, ""))
-            member_loc = _get_int(node.attributes.get(_AT_MEMBER_LOC, ""))
+        members: list[DStructMember] = []
+        for n in members_nodes:
+            member_name = _get_string(n.attributes.get(_AT_NAME, ""))
+            member_type = _get_string(n.attributes.get(_AT_TYPE, ""))
+            member_loc = _get_int(n.attributes.get(_AT_MEMBER_LOC, ""))
 
-            members.append((member_loc, DInnerVar(member_name, member_type)))
+            members.append(DStructMember(member_loc, member_name, member_type))
 
-        members.sort()
-
-        self.types.append(
-            DType(name, size, members, namespace[2:])
+        members.sort(
+            key=lambda x: float('inf') if x.location is None else x.location
         )
 
-    def visit_enum(self, node: _ParseNode, namespace: str):
-        # name, size_str = (
-        #     _get_string(node.attributes.get(_AT_NAME, '')),
-        #     _get_int(node.attributes.get(_AT_SIZE, ''))
-        # )
-        #
-        # # Structure must have a name
-        # if name is None:
-        #     return
-        #
-        # size = None if size_str is None else int(size_str)
-        #
-        # entries_nodes = [i for i in node.children if i.tag == _TAG_ENUM_ENTRY]
-        #
-        # members: list[tuple[int | None, DInnerVar]] = []
-        # for node in entries_nodes:
-        #     member_name = _get_string(node.attributes.get(_AT_NAME, ""))
-        #     member_type = _get_string(node.attributes.get(_AT_TYPE, ""))
-        #     member_loc = _get_int(node.attributes.get(_AT_MEMBER_LOC, ""))
-        #
-        #     members.append((member_loc, DInnerVar(member_name, member_type)))
-        #
-        # members.sort(key=lambda x: float('inf') if x[0] is None else x[0])
-        #
-        # self.types.append(
-        #     DType(name, size, members, namespace[2:])
-        # )
-        pass
+        return DStruct(name, size, members, namespace[2:])
+
+    def visit_basic_enum(self, node: RawDwarfNode, namespace: str):
+
+        name, size, type = (
+            _get_string(node.attributes.get(_AT_NAME, '')),
+            _get_int(node.attributes.get(_AT_SIZE, '')),
+            _get_string(node.attributes.get(_AT_TYPE, ''))
+        )
+
+        if name is None or type is None:
+            return
+
+        variants_nodes = list(node.children_matching(_TAG_ENUM_ENTRY))
+
+        variants: list[DEnumVariant] = []
+        for node in variants_nodes:
+            variant_name = _get_string(node.attributes.get(_AT_NAME, ""))
+            variant_disc_value = _get_int(node.attributes.get(_AT_DISCR_VALUE))
+
+            if variant_name is None:
+                variant_name = '?'
+
+            variants.append(DEnumVariant(
+                variant_disc_value,
+                f'{namespace[2:]}::{name}::{variant_name}',
+                0
+            ))
+
+        self.enums.append(DEnum(
+            name, size, DEnumDiscriminant(
+                type, 0
+            ), variants, namespace[2:]
+        ))
+
+    def visit_enum(self, node: RawDwarfNode, v: RawDwarfNode, namespace: str):
+        name, size = (
+            _get_string(node.attributes.get(_AT_NAME, '')),
+            _get_int(node.attributes.get(_AT_SIZE, ''))
+        )
+
+        if name is None:
+            return
+
+        discriminant = None
+        if discr_info := v.find(lambda x: x.tag == _TAG_MEMBER):
+            type = discr_info.get_attr_str(_AT_TYPE)
+            discr_loc = discr_info.get_attr_int(_AT_MEMBER_LOC)
+            if type is not None and discr_loc is not None:
+                discriminant = DEnumDiscriminant(type, discr_loc)
+
+        variants_nodes = list(v.children_matching(_TAG_VARIANT))
+
+        variants: list[DEnumVariant] = []
+        for v in variants_nodes:
+            variant_disc_value = v.get_attr_int(_AT_DISCR_VALUE)
+            v = v.find(lambda x: x.tag == _TAG_MEMBER)
+            if v is None:
+                print(f'Missing variant info for ? in enum {name}')
+                continue
+            variant_simple_name = v.get_attr_str(_AT_NAME)
+            variant_loc = v.get_attr_int(_AT_LOC)
+            variant_type_ref, _ = v.get_attr_ref(_AT_TYPE)
+
+            v = node.find(lambda x: x.location == variant_type_ref)
+
+            if v is None or v.tag != _TAG_STRUCT:
+                print(f'Invalid variant {variant_simple_name} in {name}')
+                continue
+
+            variant_struct = self.parse_struct(v, f'{namespace}::{name}')
+
+            if variant_struct is None:
+                print(f'Invalid variant type {variant_simple_name} in {name}')
+                continue
+
+            variants.append(
+                DEnumVariant(variant_disc_value, variant_struct, variant_loc))
+
+        self.enums.append(DEnum(
+            name, size, discriminant, variants, namespace[2:]
+        ))
 
     @staticmethod
-    def get_export_data(node: _ParseNode) -> tuple[str, str, str] | None:
+    def get_export_data(node: RawDwarfNode) -> tuple[str, str, str] | None:
         name, link_name, type = (
             _get_string(node.attributes.get(_AT_NAME, '')),
             _get_string(node.attributes.get(_AT_LINK_NAME, '')),
@@ -234,7 +322,7 @@ def _cleanup_link_name(s: str) -> str:
     # Chop to 100 characters
     s = s[:100]
 
-    # TODO: wabt further disambiguates names, implement that too if necessary
+    # TODO: wabt uses further disambiguation, implement that too if necessary
 
     return s
 
@@ -247,18 +335,31 @@ def _get_string(s: str | None) -> str | None:
         return None
 
     match = re.fullmatch(
-        r"\((?:0x[0-9a-fA-F]{8}\s+)?\"(.+)\"\)", s
+        r"\((0x[0-9a-fA-F]{8}\s+)?\"(.+)\"\)", s
     )
     if match is None:
         return None
-    res = match.group(1)
+    res = match.group(2)
 
     return res
 
 
+def _get_ref(s: str | None) -> tuple[int, str] | None:
+    if s is None:
+        return None
+
+    match = re.fullmatch(
+        r"\((0x[0-9a-fA-F]{8})\s+\"(.+)\"\)", s
+    )
+    if match is None:
+        return None
+
+    return int(match.group(1), 16), match.group(2)
+
+
 def _get_int(s: str | None) -> int | None:
     """
-    Parse an attribute of the format ``(<address>? "<string>")``
+    Parse an attribute of the format ``(<int>)``
     """
     if s is None:
         return None
@@ -278,58 +379,134 @@ def _get_int(s: str | None) -> int | None:
     return res
 
 
-@dataclass
-class _ParseNode:
+@dataclass(frozen=True, eq=False)
+class RawDwarfNode:
     tag: str
     attributes: dict[str, str]
-    children: list[_ParseNode]
+    children: list[RawDwarfNode]
+    location: int | None = None
 
+    @staticmethod
+    def parse(root_tag: str, dwarf: str) -> tuple[
+        RawDwarfNode, dict[int, RawDwarfNode]
+    ]:
+        # Preprocess lines (strip, get indentation, get location)
+        lines: list[tuple[int, str, int | None]] = []
+        for raw_line in dwarf.splitlines():
+            line_loc = None
+            if raw_loc := re.match(r'^(0x[0-9a-fA-F]{8}): ', raw_line):
+                line_loc = int(raw_loc.group(1), 16)
+                raw_line = ' ' * 12 + raw_line[12:]
+            unindented = raw_line.lstrip()
+            line_indent = len(raw_line) - len(unindented)
+            lines.append((line_indent, unindented.rstrip(), line_loc))
 
-from line_profiler_pycharm import profile
+        node_by_location: dict[int, RawDwarfNode] = {}
 
+        line_index = 0
 
-@profile
-def _parse_tree(root_tag_name: str, lines: list[tuple[int, str]]) -> _ParseNode:
-    line_index = 0
+        def parse_node(
+            base_indent: int, base_tag: str, base_location: int | None = None
+        ) -> RawDwarfNode:
+            nonlocal line_index
 
-    @profile
-    def parse_node(base_indent: int, tag_name: str) -> _ParseNode:
-        nonlocal line_index
+            attributes: dict[str, str] = {}
+            children: list[RawDwarfNode] = []
 
-        attributes: dict[str, str] = {}
-        children: list[_ParseNode] = []
+            while line_index < len(lines):
+                indent, line, location = lines[line_index]
+                if indent <= base_indent:
+                    break
+                line_index += 1
 
-        while line_index < len(lines):
-            indent, line = lines[line_index]
-            if indent <= base_indent:
-                break
-            line_index += 1
+                # Get tag/attribute name
+                parts = line.split(maxsplit=1)
+                obj, rest = parts if len(parts) == 2 else (line, '')
+                obj, rest = obj, rest
 
-            # Get tag/attribute name
-            line_parts = line.split(maxsplit=1)
-            obj_name, rest = line_parts if len(line_parts) == 2 else (line, '')
-            obj_name, rest = obj_name, rest
+                # Figure out what kind of object we have
+                if obj.startswith('DW_AT'):
+                    attributes[obj] = parse_attr(indent, rest)
+                elif obj.startswith('DW_TAG'):
+                    children.append(parse_node(indent, obj, location))
 
-            # Figure out what kind of object we have
-            if obj_name.startswith('DW_AT'):
-                attributes[obj_name] = parse_attr(indent, rest)
-            elif obj_name.startswith('DW_TAG'):
-                children.append(parse_node(indent, obj_name))
+            res = RawDwarfNode(base_tag, attributes, children, base_location)
+            if base_location is not None:
+                node_by_location[base_location] = res
+            return res
 
-        return _ParseNode(tag_name, attributes, children)
+        def parse_attr(base_indent: int, attr_value: str) -> str:
+            nonlocal line_index
+            while line_index < len(lines):
+                indent, line, _ = lines[line_index]
+                if indent <= base_indent:
+                    break
+                line_index += 1
+                attr_value += ' ' + line
+            return attr_value if attr_value[0] != ' ' else attr_value[1:]
 
-    @profile
-    def parse_attr(base_indent: int, attr_value: str) -> str:
-        nonlocal line_index
-        while line_index < len(lines):
-            indent, line = lines[line_index]
-            if indent <= base_indent:
-                break
-            line_index += 1
-            attr_value += ' ' + line
-        return attr_value if attr_value[0] != ' ' else attr_value[1:]
+        return parse_node(-2, root_tag), node_by_location
 
-    return parse_node(-2, root_tag_name)
+    def children_matching(self, *tags: str) -> Generator[RawDwarfNode]:
+        return (i for i in self.children if i.tag in tags)
+
+    def find(self, p: Callable[[RawDwarfNode], bool]) -> RawDwarfNode | None:
+        return next(filter(p, self.children), None)
+
+    def get_attr_str(self, attr: str) -> str | None:
+        return _get_string(self.attributes.get(attr))
+
+    def get_attr_int(self, attr: str) -> int | None:
+        return _get_int(self.attributes.get(attr))
+
+    def get_attr_ref(self, attr: str) -> tuple[int, str] | None:
+        return _get_ref(self.attributes.get(attr))
+
+    @dataclass(frozen=True, eq=False)
+    class ToStringOptions:
+        ignored_tags: set[str]
+        ignored_attrs: set[str]
+        structural_tags: set[str]
+        elidable_tags: set[str]
+
+    default_tostring_opt = ToStringOptions(set(), set(), set(), set())
+
+    def __str__(self) -> str:
+        return self.to_string()
+
+    def to_string(self, options: ToStringOptions = default_tostring_opt) -> str:
+        return self._to_string(options, '').strip()
+
+    def _to_string(self, options: ToStringOptions, indent: str) -> str:
+        if self.tag in options.ignored_tags:
+            return ''
+
+        res = f'\n\n{indent}{self.tag}'
+
+        if _AT_NAME in self.attributes:
+            res += f' {self.attributes[_AT_NAME]}'
+        if self.location is not None:
+            res += f' @ 0x{self.location:08x}'
+
+        indent += '  '
+        contents = ''
+
+        if self.tag not in options.structural_tags:
+            filtered_attrs = {
+                k: v for k, v in self.attributes.items() if
+                k not in options.ignored_attrs
+            }
+            pad = max([*(len(i) for i in filtered_attrs.keys()), 0])
+            for k, v in filtered_attrs.items():
+                contents += f'\n{indent}{k.ljust(pad)} {v}'
+
+        for child in self.children:
+            contents += child._to_string(options, indent)
+
+        if self.tag in options.elidable_tags and not contents:
+            return ''
+
+        return res + contents
 
 
 if __name__ == '__main__':
