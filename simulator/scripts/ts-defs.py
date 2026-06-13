@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+from typing import Generator
 
 from helpers.files import *
 from helpers.parse_decompiled import *
@@ -107,18 +108,18 @@ dwarf_funcs = {
     for f in dwarf_parser.exported_functions
 }
 
-dwarf_structs: dict[str, DStruct] = {
-    (f'{i.namespace}::{i.name}' if i.namespace else i.name): i
+dwarf_structs: dict[TypeName, DStruct] = {
+    i.name: i
     for i in dwarf_parser.structs
 }
 
-dwarf_enums: dict[str, DEnum] = {
-    (f'{i.namespace}::{i.name}' if i.namespace else i.name): i
+dwarf_enums: dict[TypeName, DEnum] = {
+    i.name: i
     for i in dwarf_parser.enums
 }
 
 with open('pkg/types_all.wasm.decompiled.txt', 'w') as f:
-    S: set[str | None] = set()
+    S: set[TypeName | None] = set()
     for func in dwarf_funcs.values():
         S.add(func.return_type)
         for param in func.params:
@@ -131,64 +132,60 @@ with open('pkg/types_all.wasm.decompiled.txt', 'w') as f:
             S.add(member.type)
     S.discard(None)
     S.discard('')
-    S: set[str]
-    f.write('\n'.join(sorted(S)))
-    pass
+    S: set[TypeName]
+    f.write('\n'.join(sorted(str(i) for i in S)))
 
-dyn_impls: dict[str, list[str]] = {}
+impls: dict[TraitObject, set[TypeName]] = {}
+
+
+def find_trait_impls(t: TypeName) -> TypeName:
+    if isinstance(t, TraitImpl):
+        impls.setdefault(TraitObject(t.trait), set()).add(t.implementing_type)
+    return t
+
+
 for type in dwarf_structs.values():
-    match = re.fullmatch(
-        r'<([^ ]+) as ([^ ]+)>::\{vtable_type}',
-        type.name
-    )
-    if match:
-        dyn_impls.setdefault(match.group(2), []).append(match.group(1))
+    type.name.apply_recursive(find_trait_impls)
 
-referenced_types: set[str] = set()
+used_names: set[TypeName] = set()
 for var in exported_vars:
     if var.link_name not in dwarf_vars: continue
-    t = dwarf_vars[var.link_name].type
-    if not t: continue
-    t = get_referenced_type(t)
-    if not t: continue
-    referenced_types.add(t)
+    used_names.add(unwrap_simply_derived_type(dwarf_vars[var.link_name].type))
 for func in exported_funcs:
     if func.link_name not in dwarf_funcs: continue
     v = dwarf_funcs[func.link_name]
-    for t in [
+    for typename in [
         *(i.type for i in v.params),
         *([v.return_type] if v.return_type else [])
     ]:
-        if not t: continue
-        t = get_referenced_type(t)
-        if not t: continue
-        referenced_types.add(t)
+        if not typename: continue
+        typename = unwrap_simply_derived_type(typename)
+        if not typename: continue
+        used_names.add(typename)
 
 
-def get_referenced(type_name: str) -> Generator[str | None]:
+def traverse(t: TypeName) -> Generator[TypeName | None]:
     # Types defined in dwarf as enums
-    if type_name in dwarf_enums:
-        for enum_variant in dwarf_enums[type_name].variants:
-            if isinstance(enum_variant.type, str):
+    if t in dwarf_enums:
+        for enum_variant in dwarf_enums[t].variants:
+            if isinstance(enum_variant.type, TypeName):
                 yield enum_variant.type
             else:
                 yield from (i.type for i in enum_variant.type.members)
 
     # Types defined in dwarf as structs
-    if type_name in dwarf_structs:
-        yield from (i.type for i in dwarf_structs[type_name].members)
+    if t in dwarf_structs:
+        yield from (i.type for i in dwarf_structs[t].members)
         # Include trait instantiations through dyn
-        if re.fullmatch(r'dyn .*', type_name):
-            trait_name = type_name[3:].strip()
-            if trait_name in dyn_impls:
-                yield from dyn_impls[trait_name]
+        if isinstance(t, TraitObject):
+            yield from impls.get(t, [])
 
 
-referenced_types = closure(
-    referenced_types,
+used_names = closure(
+    used_names,
     lambda type_name: filter_none(
-        map(get_referenced_type, filter_none(
-            get_referenced(type_name)
+        map(unwrap_simply_derived_type, filter_none(
+            traverse(type_name)
         ))
     ),
     on_find=lambda x: print(f'Found type {x}'),
@@ -196,10 +193,10 @@ referenced_types = closure(
 )
 
 dwarf_structs = {
-    k: v for k, v in dwarf_structs.items() if k in referenced_types
+    k: v for k, v in dwarf_structs.items() if k in used_names
 }
 dwarf_enums = {
-    k: v for k, v in dwarf_enums.items() if k in referenced_types
+    k: v for k, v in dwarf_enums.items() if k in used_names
 }
 
 print('Generating defs')
@@ -218,18 +215,18 @@ number of package private protected public require return set static string
 super switch symbol this throw true try type typeof var void while with yield
 """.strip().split()
 
-generated_type_obj_names: dict[str, str] = {}
+generated_type_obj_names: dict[TypeName, str] = {}
 for id, type in enumerate(dwarf_structs.keys()):
-    v = parse_typename(type).to_alphanumeric()
+    v = type.to_alphanumeric()
     if v in generated_type_obj_names.values() or v in typescript_reserved_words:
         v = f'{v}${id}'
 
     generated_type_obj_names[type] = f'{v}'
 
 
-def quote_type(type_name: str) -> str:
-    referenced = get_referenced_type(type_name)
-    type_name = strip_namespaces(type_name)
+def quote_type(type_name: TypeName) -> str:
+    referenced = unwrap_simply_derived_type(type_name)
+    type_name = type_name.strip_namespaces()
     if referenced is not None and referenced in generated_type_obj_names:
         referenced = generated_type_obj_names[referenced]
         return f'{{@link {referenced} `{type_name}`}}'
@@ -254,7 +251,7 @@ for var in exported_vars:
 for func in exported_funcs:
     doc = []
     if func.WASM_type:
-        doc.append(f'- Return type: {quote_type(func.WASM_type)}')
+        doc.append(f'- Return type: `{func.WASM_type}`')
 
     param_docs: dict[str, list[str]] = {
         param.link_name: [
@@ -276,7 +273,7 @@ for func in exported_funcs:
                 func.params[0].link_name,
                 DInnerVar(
                     '<RVO return value>',
-                    f'&mut {func_info.return_type}'
+                    Reference(False, True, func_info.return_type)
                 )
             ))
             param_assignment.extend(
@@ -322,7 +319,7 @@ for func in exported_funcs:
 for id, (fullname, type) in enumerate(dwarf_structs.items()):
 
     doc = [
-        f'- Name: `{re.sub(r'\b(\w+::)', '', type.name)}`',
+        f'- Name: `{type.name.strip_namespaces()}`',
         f'- Size: `{type.size}`',
     ]
 
@@ -337,15 +334,8 @@ for id, (fullname, type) in enumerate(dwarf_structs.items()):
         for member in type.members:
             member: DStructMember
 
-            type = '' if member.type is None else member.type
-            name = '?' if member.name is None else member.name
-
-            type = quote_type(type)
-
-            type = strip_namespaces(type)
-            name = strip_namespaces(name)
-
-            name = f'`{name}`'
+            type = quote_type(member.type.strip_namespaces())
+            name = f'`{member.name.strip_namespaces()}`'
             offset = f'`{member.location}`'
 
             field_table_entries.append((name, offset, type))
@@ -363,12 +353,11 @@ for id, (fullname, type) in enumerate(dwarf_structs.items()):
             f'| {"-" * col_1_w} | {"-" * col_2_w} | {"-" * col_3_w} |'
         )
 
-    if fullname.startswith('dyn '):
-        trait = fullname[3:].strip()
-        if trait in dyn_impls:
+    if isinstance(fullname, TraitObject):
+        if fullname in impls:
             doc.append('')
             doc.append(f'Implementations: {
-            ', '.join(quote_type(i) for i in dyn_impls[trait])
+            ', '.join(quote_type(i) for i in impls[fullname])
             }')
 
     aux_contents.append('')
@@ -407,22 +396,40 @@ with open(file_wasm_decompiled, 'w') as out:
         function_name, disambiguation = function_name[:100], function_name[100:]
 
         if function_name in dwarf_funcs:
-            function_name = dwarf_funcs[function_name].name
-            # Quote non-alphanumeric names
-            if re.match(r'.*\W.*', function_name):
-                function_name = f'"{function_name}"'
+            function_name = str(dwarf_funcs[function_name].name.strip_namespaces())
 
         # Add disambiguation chars back in
-        function_name += disambiguation
+        if disambiguation:
+            function_name += f"${disambiguation}"
+
+        # Quote non-alphanumeric names
+        if re.match(r'.*\W.*', function_name):
+            function_name = f'"{function_name}"'
 
         return function_name + mangled.group(2)
 
 
-    out.write(re.sub(
+    decompiled_text = re.sub(
         # Only match what appear to be actual function calls or definitions
-        fr'\b(\w+)( *\()',
-        replace_mangled,
+        r'\b(\w+)( *\()',
+        replace_mangled, decompiled_text
+    )
+    decompiled_text = re.sub(
+        r'([,=:])(?:\s*)?',
+        r'\1 ',
         decompiled_text
-    ))
+    )
+    decompiled_text = re.sub(
+        r'\(\s*',
+        '(',
+        decompiled_text
+    )
+    decompiled_text = re.sub(
+        r'\s*\)',
+        ')',
+        decompiled_text
+    )
+
+    out.write(decompiled_text)
 
 print('Done')

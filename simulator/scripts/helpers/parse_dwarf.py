@@ -1,100 +1,108 @@
 import re
 from dataclasses import dataclass
-from typing import Generator, Callable, Iterable, Any
+from typing import Generator, Callable, final
 
-type_ref = str  # | tuple[str, "DType"]
+from scripts.helpers.typename import *
+
+__all__ = [
+    "DFunc", "DVar", "DStruct", "DStructMember", "DEnum", "DEnumDiscriminant",
+    "DEnumVariant", "DInnerVar", "DwarfParser", "RawDwarfNode"
+]
+
+type_ref = TypeName
 
 
+@final
 @dataclass(frozen=True, eq=False)
 class DFunc:
-    name: str
+    name: Name
     link_name: str
     return_type: type_ref
     params: list[DInnerVar]
-    namespace: str
 
 
+@final
 @dataclass(frozen=True, eq=False)
 class DVar:
-    name: str
+    name: Name
     link_name: str
     type: type_ref
 
-    namespace: str
 
-
+@final
 @dataclass(frozen=True, eq=False)
 class DStruct:
-    name: str
+    name: TypeName
     size: int | None
     members: list[DStructMember]
 
-    namespace: str
 
-
+@final
 @dataclass(frozen=True, eq=False)
 class DStructMember:
     location: int | None
+    name: Name
+    type: type_ref
+
+
+@final
+@dataclass(frozen=True, eq=False)
+class DInnerVar:
     name: str | None
-    type: type_ref | None
+    type: type_ref
 
 
+@final
 @dataclass(frozen=True, eq=False)
 class DEnum:
-    name: str
+    name: TypeName
     size: int | None
     discriminant: DEnumDiscriminant | None
     variants: list[DEnumVariant]
 
-    namespace: str
 
-
+@final
 @dataclass(frozen=True, eq=False)
 class DEnumDiscriminant:
     type: type_ref
     location: int | None
 
 
+@final
 @dataclass(frozen=True, eq=False)
 class DEnumVariant:
     discriminant: int | None
-    type: DStruct | str
+    type: DStruct
     location: int | None
 
 
-@dataclass(frozen=True, eq=False)
-class DInnerVar:
-    name: str | None
-    type: type_ref | None
+TAG_NAMESPACE = 'DW_TAG_namespace'
 
+TAG_VAR = 'DW_TAG_variable'
 
-_TAG_NAMESPACE = 'DW_TAG_namespace'
+TAG_FUNC = 'DW_TAG_subprogram'
+TAG_PARAM = 'DW_TAG_formal_parameter'
 
-_TAG_VAR = 'DW_TAG_variable'
+TAG_STRUCT = 'DW_TAG_structure_type'
+TAG_MEMBER = 'DW_TAG_member'
+TAG_VARIANT_PART = 'DW_TAG_variant_part'
+TAG_VARIANT = 'DW_TAG_variant'
+TAG_ENUM = 'DW_TAG_enumeration_type'
+TAG_ENUM_ENTRY = 'DW_TAG_enumerator'
 
-_TAG_FUNC = 'DW_TAG_subprogram'
-_TAG_PARAM = 'DW_TAG_formal_parameter'
+AT_LINK_NAME = 'DW_AT_linkage_name'
+AT_NAME = 'DW_AT_name'
+AT_TYPE = 'DW_AT_type'
+AT_LOC = 'DW_AT_location'
 
-_TAG_STRUCT = 'DW_TAG_structure_type'
-_TAG_MEMBER = 'DW_TAG_member'
-_TAG_VARIANT_PART = 'DW_TAG_variant_part'
-_TAG_VARIANT = 'DW_TAG_variant'
-_TAG_ENUM = 'DW_TAG_enumeration_type'
-_TAG_ENUM_ENTRY = 'DW_TAG_enumerator'
+AT_SIZE = 'DW_AT_byte_size'
+AT_MEMBER_LOC = 'DW_AT_data_member_location'
+AT_ALIGNMENT = 'DW_AT_alignment'
 
-_AT_LINK_NAME = 'DW_AT_linkage_name'
-_AT_NAME = 'DW_AT_name'
-_AT_TYPE = 'DW_AT_type'
-_AT_LOC = 'DW_AT_location'
+AT_DISCR = 'DW_AT_discr'
+AT_DISCR_VALUE = 'DW_AT_discr_value'
 
-_AT_SIZE = 'DW_AT_byte_size'
-_AT_MEMBER_LOC = 'DW_AT_data_member_location'
-_AT_ALIGNMENT = 'DW_AT_alignment'
-
-_AT_DISCR = 'DW_AT_discr'
-_AT_DISCR_VALUE = 'DW_AT_discr_value'
-
-_AT_ENUM_VALUE = 'DW_AT_const_value'
+AT_ENUM_VALUE = 'DW_AT_const_value'
 
 
 class DwarfParser:
@@ -109,45 +117,48 @@ class DwarfParser:
         dwarf = re.sub(r'\s+\n', '\n', dwarf)
         tree, lookup = RawDwarfNode.parse('root', dwarf)
 
-        self.visit(tree)
+        self.visit(tree, None)
 
         return tree, lookup
 
-    def visit(self, node: RawDwarfNode, namespace: str = ''):
-        if node.tag == _TAG_NAMESPACE:
-            namespace_name = _get_string(
-                node.attributes.get(_AT_NAME, "")
+    def visit(self, node: RawDwarfNode, namespace: Name | None):
+        if node.tag == TAG_NAMESPACE:
+            name = _get_string(
+                node.attributes.get(AT_NAME, "")
             )
+            if name is None:
+                raise RuntimeError("Namespace does not have a name")
+            namespace = parse_name(name, namespace)
+
             for child in node.children:
-                self.visit(child, f"{namespace}::{namespace_name}")
-            pass
-        elif node.tag == _TAG_FUNC:
+                self.visit(child, namespace)
+        elif node.tag == TAG_FUNC:
             self.visit_func(node, namespace)
-        elif node.tag == _TAG_VAR:
+        elif node.tag == TAG_VAR:
             self.visit_var(node, namespace)
-        elif node.tag == _TAG_STRUCT:
-            if v := node.find(lambda x: x.tag == _TAG_VARIANT_PART):
+        elif node.tag == TAG_STRUCT:
+            if v := node.find(lambda x: x.tag == TAG_VARIANT_PART):
                 self.visit_enum(node, v, namespace)
             else:
                 if res := self.parse_struct(node, namespace):
                     self.structs.append(res)
-        elif node.tag == _TAG_ENUM:
+        elif node.tag == TAG_ENUM:
             self.visit_basic_enum(node, namespace)
         else:
             for child in node.children:
                 self.visit(child, namespace)
 
-    def visit_var(self, node: RawDwarfNode, namespace: str):
+    def visit_var(self, node: RawDwarfNode, namespace: Name | None):
         export_data = self.get_export_data(node)
         if export_data is None: return
 
         name, link_name, type = export_data
 
         self.exported_variables.append(
-            DVar(name, link_name, type, namespace[2:])
+            DVar(parse_name(name, namespace), link_name, parse_typename(type))
         )
 
-    def visit_func(self, node: RawDwarfNode, namespace: str):
+    def visit_func(self, node: RawDwarfNode, namespace: Name | None):
         # Skip dead code
         if node.attributes.get('DW_AT_low_pc') == '(dead code)':
             return
@@ -157,135 +168,162 @@ class DwarfParser:
 
         name, link_name, return_type = export_data
 
-        params_nodes = list(node.children_matching(_TAG_PARAM))
+        params_nodes = list(node.children_matching(TAG_PARAM))
 
         params: list[DInnerVar] = []
         for node in params_nodes:
-            param_name = _get_string(node.attributes.get(_AT_NAME, ""))
-            param_type = _get_string(node.attributes.get(_AT_TYPE, ""))
+            param_name = _get_string(node.attributes.get(AT_NAME, ""))
+            param_type = _get_string(node.attributes.get(AT_TYPE, ""))
 
-            params.append(DInnerVar(param_name, param_type))
+            params.append(DInnerVar(param_name, parse_typename(param_type)))
 
         self.exported_functions.append(
-            DFunc(name, link_name, return_type, params, namespace[2:])
+            DFunc(
+                parse_name(name, namespace),
+                link_name,
+                parse_typename(return_type),
+                params
+            )
         )
 
     @staticmethod
-    def parse_struct(n: RawDwarfNode, namespace: str) -> DStruct | None:
-        name, size_str = (
-            _get_string(n.attributes.get(_AT_NAME, '')),
-            _get_int(n.attributes.get(_AT_SIZE, ''))
+    def parse_struct(n: RawDwarfNode, namespace: Name | None) -> DStruct | None:
+        name_str, size_str = (
+            _get_string(n.attributes.get(AT_NAME, '')),
+            _get_int(n.attributes.get(AT_SIZE, ''))
         )
 
         # Structure must have a name
-        if name is None:
+        if name_str is None:
             return None
 
         size = None if size_str is None else int(size_str)
 
-        members_nodes = list(n.children_matching(_TAG_MEMBER))
+        members_nodes = list(n.children_matching(TAG_MEMBER))
 
         members: list[DStructMember] = []
         for n in members_nodes:
-            member_name = _get_string(n.attributes.get(_AT_NAME, ""))
-            member_type = _get_string(n.attributes.get(_AT_TYPE, ""))
-            member_loc = _get_int(n.attributes.get(_AT_MEMBER_LOC, ""))
+            member_name = _get_string(n.attributes.get(AT_NAME, ""))
+            member_type = _get_string(n.attributes.get(AT_TYPE, ""))
+            member_loc = _get_int(n.attributes.get(AT_MEMBER_LOC, ""))
 
-            members.append(DStructMember(member_loc, member_name, member_type))
+            if member_name is None:
+                raise RuntimeError("Expected member name")
+
+            members.append(DStructMember(
+                member_loc,
+                parse_name(member_name),
+                parse_typename(member_type)
+            ))
 
         members.sort(
             key=lambda x: float('inf') if x.location is None else x.location
         )
 
-        return DStruct(name, size, members, namespace[2:])
-
-    def visit_basic_enum(self, node: RawDwarfNode, namespace: str):
-
-        name, size, type = (
-            _get_string(node.attributes.get(_AT_NAME, '')),
-            _get_int(node.attributes.get(_AT_SIZE, '')),
-            _get_string(node.attributes.get(_AT_TYPE, ''))
+        return DStruct(
+            parse_typename(name_str, namespace),
+            size,
+            members
         )
 
-        if name is None or type is None:
+    def visit_basic_enum(self, node: RawDwarfNode, namespace: Name | None):
+
+        name_str, size, type = (
+            _get_string(node.attributes.get(AT_NAME, '')),
+            _get_int(node.attributes.get(AT_SIZE, '')),
+            _get_string(node.attributes.get(AT_TYPE, ''))
+        )
+
+        if name_str is None or type is None:
             return
 
-        variants_nodes = list(node.children_matching(_TAG_ENUM_ENTRY))
+        name = parse_name(name_str, namespace)
+
+        variants_nodes = list(node.children_matching(TAG_ENUM_ENTRY))
 
         variants: list[DEnumVariant] = []
         for node in variants_nodes:
-            variant_name = _get_string(node.attributes.get(_AT_NAME, ""))
-            variant_disc_value = _get_int(node.attributes.get(_AT_DISCR_VALUE))
+            variant_name = _get_string(node.attributes.get(AT_NAME, ""))
+            variant_disc_value = _get_int(node.attributes.get(AT_DISCR_VALUE))
 
             if variant_name is None:
                 variant_name = '?'
 
             variants.append(DEnumVariant(
                 variant_disc_value,
-                f'{namespace[2:]}::{name}::{variant_name}',
+                DStruct(parse_name(variant_name, name), size, []),
                 0
             ))
 
         self.enums.append(DEnum(
-            name, size, DEnumDiscriminant(
-                type, 0
-            ), variants, namespace[2:]
+            name, size,
+            DEnumDiscriminant(parse_typename(type), 0),
+            variants
         ))
 
-    def visit_enum(self, node: RawDwarfNode, v: RawDwarfNode, namespace: str):
-        name, size = (
-            _get_string(node.attributes.get(_AT_NAME, '')),
-            _get_int(node.attributes.get(_AT_SIZE, ''))
+    def visit_enum(
+        self,
+        node: RawDwarfNode, v: RawDwarfNode,
+        namespace: Name | None
+    ):
+        name_str, size = (
+            _get_string(node.attributes.get(AT_NAME, '')),
+            _get_int(node.attributes.get(AT_SIZE, ''))
         )
 
-        if name is None:
+        if name_str is None or size is None:
             return
 
-        discriminant = None
-        if discr_info := v.find(lambda x: x.tag == _TAG_MEMBER):
-            type = discr_info.get_attr_str(_AT_TYPE)
-            discr_loc = discr_info.get_attr_int(_AT_MEMBER_LOC)
-            if type is not None and discr_loc is not None:
-                discriminant = DEnumDiscriminant(type, discr_loc)
+        name = parse_name(name_str, namespace)
 
-        variants_nodes = list(v.children_matching(_TAG_VARIANT))
+        discriminant = None
+        if discr_info := v.find(lambda x: x.tag == TAG_MEMBER):
+            type = discr_info.get_attr_str(AT_TYPE)
+            discr_loc = discr_info.get_attr_int(AT_MEMBER_LOC)
+            if type is not None and discr_loc is not None:
+                discriminant = DEnumDiscriminant(
+                    parse_typename(type), discr_loc
+                )
+
+        variants_nodes = list(v.children_matching(TAG_VARIANT))
 
         variants: list[DEnumVariant] = []
         for v in variants_nodes:
-            variant_disc_value = v.get_attr_int(_AT_DISCR_VALUE)
-            v = v.find(lambda x: x.tag == _TAG_MEMBER)
+            variant_disc_value = v.get_attr_int(AT_DISCR_VALUE)
+            v = v.find(lambda x: x.tag == TAG_MEMBER)
             if v is None:
                 print(f'Missing variant info for ? in enum {name}')
                 continue
-            variant_simple_name = v.get_attr_str(_AT_NAME)
-            variant_loc = v.get_attr_int(_AT_LOC)
-            variant_type_ref, _ = v.get_attr_ref(_AT_TYPE)
+            variant_simple_name = v.get_attr_str(AT_NAME)
+            variant_loc = v.get_attr_int(AT_LOC)
+            variant_type_ref, _ = v.get_attr_ref(AT_TYPE)
 
             v = node.find(lambda x: x.location == variant_type_ref)
 
-            if v is None or v.tag != _TAG_STRUCT:
+            if v is None or v.tag != TAG_STRUCT:
                 print(f'Invalid variant {variant_simple_name} in {name}')
                 continue
 
-            variant_struct = self.parse_struct(v, f'{namespace}::{name}')
+            variant_struct = self.parse_struct(v, namespace=name)
 
             if variant_struct is None:
                 print(f'Invalid variant type {variant_simple_name} in {name}')
                 continue
 
             variants.append(
-                DEnumVariant(variant_disc_value, variant_struct, variant_loc))
+                DEnumVariant(variant_disc_value, variant_struct, variant_loc)
+            )
 
         self.enums.append(DEnum(
-            name, size, discriminant, variants, namespace[2:]
+            name, size, discriminant, variants
         ))
 
     @staticmethod
     def get_export_data(node: RawDwarfNode) -> tuple[str, str, str] | None:
         name, link_name, type = (
-            _get_string(node.attributes.get(_AT_NAME, '')),
-            _get_string(node.attributes.get(_AT_LINK_NAME, '')),
-            _get_string(node.attributes.get(_AT_TYPE, ''))
+            _get_string(node.attributes.get(AT_NAME, '')),
+            _get_string(node.attributes.get(AT_LINK_NAME, '')),
+            _get_string(node.attributes.get(AT_TYPE, ''))
         )
 
         # Exports must have a name
@@ -297,18 +335,13 @@ class DwarfParser:
         # Type defaults to empty string
         if type is None:
             type = ''
-        # wasm-decompile does some cleanup on names that we approximate here
-        link_name = _cleanup_link_name(link_name)
+        # wasm-decompile does some extra stuff to names that we approximate here
+        link_name = _fix_link_name(link_name)
 
         return name, link_name, type
 
 
-def _split_indent(line: str) -> tuple[int, str]:
-    unindented = line.lstrip()
-    return len(line) - len(unindented), unindented.rstrip()
-
-
-def _cleanup_link_name(s: str) -> str:
+def _fix_link_name(s: str) -> str:
     # Fix names to match wasm-decompile output
     # See include/wabt/decompiler-naming.h in github.com/WebAssembly/wabt/
 
@@ -483,8 +516,8 @@ class RawDwarfNode:
 
         res = f'\n\n{indent}{self.tag}'
 
-        if _AT_NAME in self.attributes:
-            res += f' {self.attributes[_AT_NAME]}'
+        if AT_NAME in self.attributes:
+            res += f' {self.attributes[AT_NAME]}'
         if self.location is not None:
             res += f' @ 0x{self.location:08x}'
 
