@@ -17,20 +17,19 @@ def closure(
         for y in s:
             on_find(y)
 
-    # Use dict instead of set to preserve order between closure iterations.
+    # Use dict instead of set to preserve order between closure iterations and ensure determinism
     res: dict[T, None] = dict((i, None) for i in s)
-    # However, we don't really need to preserve order within an iteration, so set here is fine
-    edge = set(s)
+    edge: dict[T, None] = dict(res)
     while edge:
         if on_cycle:
             on_cycle()
-        old_edge = list(edge)
-        edge = set()
+        old_edge = list(edge.keys())
+        edge = dict()
         for x in old_edge:
             for y in find(x):
                 if y in res: continue
                 res[y] = None
-                edge.add(y)
+                edge[y] = None
                 if on_find:
                     on_find(y)
     return res.keys()
