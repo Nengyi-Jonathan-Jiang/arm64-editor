@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 
+__all__ = ["DecompiledFunction", "DecompiledVariable", "parse_decompiled"]
 
 @dataclass(frozen=True, eq=False)
 class DecompiledFunction:
@@ -78,7 +79,7 @@ def _parse_params(raw_params: str) -> list[DecompiledVariable]:
     # List of structs that were substituted for placeholders
     substitution: list[str] = []
 
-    def sub(m: re.Match) -> str:
+    def sub(m: re.Match[str]) -> str:
         """ Substitute a struct type for a placeholder """
         substitution.append(m.group(1))
         return f'#{len(substitution) - 1}'

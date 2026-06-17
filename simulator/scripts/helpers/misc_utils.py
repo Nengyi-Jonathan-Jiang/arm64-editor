@@ -7,17 +7,19 @@ T = TypeVar("T")
 
 
 def closure(
-    s: set[T],
+    s: Iterable[T],
     find: Callable[[T], Iterable[T]],
     *,
     on_find: Callable[[T], None] | None = None,
     on_cycle: Callable[[], None] | None = None
-) -> set[T]:
+) -> Iterable[T]:
     if on_find:
         for y in s:
             on_find(y)
 
-    res = set(s)
+    # Use dict instead of set to preserve order between closure iterations.
+    res: dict[T, None] = dict((i, None) for i in s)
+    # However, we don't really need to preserve order within an iteration, so set here is fine
     edge = set(s)
     while edge:
         if on_cycle:
@@ -27,11 +29,11 @@ def closure(
         for x in old_edge:
             for y in find(x):
                 if y in res: continue
-                res.add(y)
+                res[y] = None
                 edge.add(y)
                 if on_find:
                     on_find(y)
-    return res
+    return res.keys()
 
 
 def filter_none(x: Iterable[T | None], /) -> Iterable[T]:
@@ -43,7 +45,7 @@ class CharStream:
         self._s = s
         self._i = 0
 
-    def pos(self):
+    def pos(self) -> int:
         return self._i
 
     def __getitem__(self, i: int | slice) -> str:
@@ -52,18 +54,18 @@ class CharStream:
     def _clamp(self, i: int) -> int:
         return min(i, len(self._s))
 
-    def peek(self, *, future=0, amount=1) -> str:
+    def peek(self, *, future: int = 0, amount: int = 1) -> str:
         start = self._clamp(self._i + future)
         end = self._clamp(start + amount)
 
         return self._s[start:end]
 
-    def next(self, *, amount=1) -> str:
+    def next(self, *, amount: int = 1) -> str:
         res = self.peek(amount=amount)
         self._i += len(res)
         return res
 
-    def skip(self, *, amount=1):
+    def skip(self, *, amount: int = 1) -> None:
         self.next(amount=amount)
 
     @overload

@@ -5,11 +5,9 @@ from typing import Generator, Callable, final
 from scripts.helpers.typename import *
 
 __all__ = [
-    "DFunc", "DVar", "DStruct", "DStructMember", "DEnum", "DEnumDiscriminant",
-    "DEnumVariant", "DInnerVar", "DwarfParser", "RawDwarfNode"
+    "DFunc", "DVar", "DStruct", "DStructMember", "DEnum", "DEnumDiscriminant", "DEnumVariant",
+    "DInnerVar", "DwarfParser", "RawDwarfNode"
 ]
-
-type_ref = TypeName
 
 
 @final
@@ -17,7 +15,7 @@ type_ref = TypeName
 class DFunc:
     name: Name
     link_name: str
-    return_type: type_ref
+    return_type: TypeName
     params: list[DInnerVar]
 
 
@@ -26,7 +24,7 @@ class DFunc:
 class DVar:
     name: Name
     link_name: str
-    type: type_ref
+    type: TypeName
 
 
 @final
@@ -42,14 +40,14 @@ class DStruct:
 class DStructMember:
     location: int | None
     name: Name
-    type: type_ref
+    type: TypeName
 
 
 @final
 @dataclass(frozen=True, eq=False)
 class DInnerVar:
     name: str | None
-    type: type_ref
+    type: TypeName
 
 
 @final
@@ -64,7 +62,7 @@ class DEnum:
 @final
 @dataclass(frozen=True, eq=False)
 class DEnumDiscriminant:
-    type: type_ref
+    type: TypeName
     location: int | None
 
 
@@ -106,7 +104,7 @@ AT_ENUM_VALUE = 'DW_AT_const_value'
 
 
 class DwarfParser:
-    def __init__(self):
+    def __init__(self) -> None:
         self.exported_functions: list[DFunc] = []
         self.exported_variables: list[DVar] = []
         self.structs: list[DStruct] = []
@@ -121,11 +119,9 @@ class DwarfParser:
 
         return tree, lookup
 
-    def visit(self, node: RawDwarfNode, namespace: Name | None):
+    def visit(self, node: RawDwarfNode, namespace: Name | None) -> None:
         if node.tag == TAG_NAMESPACE:
-            name = _get_string(
-                node.attributes.get(AT_NAME, "")
-            )
+            name = _get_string(node.attributes.get(AT_NAME, None))
             if name is None:
                 raise RuntimeError("Namespace does not have a name")
             namespace = parse_name(name, namespace)
@@ -133,38 +129,43 @@ class DwarfParser:
             for child in node.children:
                 self.visit(child, namespace)
         elif node.tag == TAG_FUNC:
-            self.visit_func(node, namespace)
+            if func := self.visit_func(node, namespace):
+                self.exported_functions.append(func)
         elif node.tag == TAG_VAR:
-            self.visit_var(node, namespace)
+            self.exported_variables.append(self.visit_var(node, namespace))
         elif node.tag == TAG_STRUCT:
             if v := node.find(lambda x: x.tag == TAG_VARIANT_PART):
-                self.visit_enum(node, v, namespace)
+                if enum := self.visit_enum(node, v, namespace):
+                    self.enums.append(enum)
             else:
-                if res := self.parse_struct(node, namespace):
-                    self.structs.append(res)
+                if struct := self.parse_struct(node, namespace):
+                    self.structs.append(struct)
         elif node.tag == TAG_ENUM:
-            self.visit_basic_enum(node, namespace)
+            if enum := self.visit_basic_enum(node, namespace):
+                self.enums.append(enum)
         else:
             for child in node.children:
                 self.visit(child, namespace)
 
-    def visit_var(self, node: RawDwarfNode, namespace: Name | None):
-        export_data = self.get_export_data(node)
-        if export_data is None: return
+    @staticmethod
+    def visit_var(node: RawDwarfNode, namespace: Name | None) -> DVar:
+        export_data = DwarfParser.get_export_data(node)
+        if export_data is None:
+            raise RuntimeError("Missing variable data")
 
         name, link_name, type = export_data
 
-        self.exported_variables.append(
-            DVar(parse_name(name, namespace), link_name, parse_typename(type))
+        return DVar(
+            parse_name(name, namespace),
+            link_name,
+            parse_typename(type)
         )
 
-    def visit_func(self, node: RawDwarfNode, namespace: Name | None):
-        # Skip dead code
-        if node.attributes.get('DW_AT_low_pc') == '(dead code)':
-            return
-
-        export_data = self.get_export_data(node)
-        if export_data is None: return
+    @staticmethod
+    def visit_func(node: RawDwarfNode, namespace: Name | None) -> DFunc | None:
+        export_data = DwarfParser.get_export_data(node)
+        if export_data is None:
+            return None
 
         name, link_name, return_type = export_data
 
@@ -172,18 +173,16 @@ class DwarfParser:
 
         params: list[DInnerVar] = []
         for node in params_nodes:
-            param_name = _get_string(node.attributes.get(AT_NAME, ""))
-            param_type = _get_string(node.attributes.get(AT_TYPE, ""))
+            param_name = _get_string(node.attributes.get(AT_NAME, None))
+            param_type = _get_string(node.attributes.get(AT_TYPE, None))
 
             params.append(DInnerVar(param_name, parse_typename(param_type)))
 
-        self.exported_functions.append(
-            DFunc(
-                parse_name(name, namespace),
-                link_name,
-                parse_typename(return_type),
-                params
-            )
+        return DFunc(
+            parse_name(name, namespace),
+            link_name,
+            parse_typename(return_type),
+            params
         )
 
     @staticmethod
@@ -226,8 +225,8 @@ class DwarfParser:
             members
         )
 
-    def visit_basic_enum(self, node: RawDwarfNode, namespace: Name | None):
-
+    @staticmethod
+    def visit_basic_enum(node: RawDwarfNode, namespace: Name | None) -> DEnum | None:
         name_str, size, type = (
             _get_string(node.attributes.get(AT_NAME, '')),
             _get_int(node.attributes.get(AT_SIZE, '')),
@@ -235,7 +234,7 @@ class DwarfParser:
         )
 
         if name_str is None or type is None:
-            return
+            return None
 
         name = parse_name(name_str, namespace)
 
@@ -244,7 +243,7 @@ class DwarfParser:
         variants: list[DEnumVariant] = []
         for node in variants_nodes:
             variant_name = _get_string(node.attributes.get(AT_NAME, ""))
-            variant_disc_value = _get_int(node.attributes.get(AT_DISCR_VALUE))
+            variant_disc_value = _get_int(node.attributes.get(AT_ENUM_VALUE))
 
             if variant_name is None:
                 variant_name = '?'
@@ -255,24 +254,22 @@ class DwarfParser:
                 0
             ))
 
-        self.enums.append(DEnum(
+        return DEnum(
             name, size,
             DEnumDiscriminant(parse_typename(type), 0),
             variants
-        ))
+        )
 
     def visit_enum(
-        self,
-        node: RawDwarfNode, v: RawDwarfNode,
-        namespace: Name | None
-    ):
+        self, node: RawDwarfNode, v: RawDwarfNode, namespace: Name | None
+    ) -> DEnum | None:
         name_str, size = (
             _get_string(node.attributes.get(AT_NAME, '')),
             _get_int(node.attributes.get(AT_SIZE, ''))
         )
 
         if name_str is None or size is None:
-            return
+            return None
 
         name = parse_name(name_str, namespace)
 
@@ -288,23 +285,26 @@ class DwarfParser:
         variants_nodes = list(v.children_matching(TAG_VARIANT))
 
         variants: list[DEnumVariant] = []
-        for v in variants_nodes:
-            variant_disc_value = v.get_attr_int(AT_DISCR_VALUE)
-            v = v.find(lambda x: x.tag == TAG_MEMBER)
-            if v is None:
+        for variant in variants_nodes:
+            variant_disc_value = variant.get_attr_int(AT_DISCR_VALUE)
+            if v2 := variant.find(lambda x: x.tag == TAG_MEMBER):
+                variant_simple_name = v2.get_attr_str(AT_NAME)
+                variant_loc = v2.get_attr_int(AT_MEMBER_LOC)
+                variant_type_ref = v2.get_attr_ref(AT_TYPE)
+            else:
                 print(f'Missing variant info for ? in enum {name}')
                 continue
-            variant_simple_name = v.get_attr_str(AT_NAME)
-            variant_loc = v.get_attr_int(AT_LOC)
-            variant_type_ref, _ = v.get_attr_ref(AT_TYPE)
 
-            v = node.find(lambda x: x.location == variant_type_ref)
+            if variant_type_ref is None:
+                continue
 
-            if v is None or v.tag != TAG_STRUCT:
+            v3 = node.find(lambda x: x.location == variant_type_ref[0])
+
+            if v3 is None or v3.tag != TAG_STRUCT:
                 print(f'Invalid variant {variant_simple_name} in {name}')
                 continue
 
-            variant_struct = self.parse_struct(v, namespace=name)
+            variant_struct = self.parse_struct(v3, namespace=name)
 
             if variant_struct is None:
                 print(f'Invalid variant type {variant_simple_name} in {name}')
@@ -314,9 +314,7 @@ class DwarfParser:
                 DEnumVariant(variant_disc_value, variant_struct, variant_loc)
             )
 
-        self.enums.append(DEnum(
-            name, size, discriminant, variants
-        ))
+        return DEnum(name, size, discriminant, variants)
 
     @staticmethod
     def get_export_data(node: RawDwarfNode) -> tuple[str, str, str] | None:
@@ -402,9 +400,9 @@ def _get_int(s: str | None) -> int | None:
     )
     if match is None:
         return None
-    if match.group(1):
+    if match.group(1) is not None:
         res = int(match.group(1), 16)
-    elif match.group(2):
+    elif match.group(2) is not None:
         res = int(match.group(2), 10)
     else:
         return None
@@ -501,6 +499,24 @@ class RawDwarfNode:
         ignored_attrs: set[str]
         structural_tags: set[str]
         elidable_tags: set[str]
+
+        def __post_init__(self) -> None:
+            object.__setattr__(
+                self, 'ignored_tags',
+                set(f'DW_TAG_{i}' for i in self.ignored_tags)
+            )
+            object.__setattr__(
+                self, 'ignored_attrs',
+                set(f'DW_AT_{i}' for i in self.ignored_attrs)
+            )
+            object.__setattr__(
+                self, 'structural_tags',
+                set(f'DW_TAG_{i}' for i in self.structural_tags)
+            )
+            object.__setattr__(
+                self, 'elidable_tags',
+                set(f'DW_TAG_{i}' for i in self.elidable_tags)
+            )
 
     default_tostring_opt = ToStringOptions(set(), set(), set(), set())
 

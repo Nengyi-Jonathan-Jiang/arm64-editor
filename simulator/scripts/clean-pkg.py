@@ -2,12 +2,14 @@ import os, errno
 
 from helpers.files import *
 
-def remove_silent(filename):
+
+def remove_silent(filename: str) -> None:
     try:
         os.remove(filename)
-    except OSError as e: # this would be "except OSError, e:" before Python 2.6
-        if e.errno != errno.ENOENT: # errno.ENOENT = no such file or directory
-            raise # re-raise exception if a different error occurred
+    except OSError as e:
+        if e.errno != errno.ENOENT:
+            raise
+
 
 remove_silent(file_wasm_debug)
 remove_silent(file_wasm_decompiled)

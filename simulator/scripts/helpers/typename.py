@@ -228,23 +228,20 @@ class TypeName(ABC):
     """
 
     @abstractmethod
-    def __str__(self):
-        raise NotImplementedError
-
-    def __repr__(self):
+    def __repr__(self) -> str:
         raise NotImplementedError
 
     @abstractmethod
     def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         raise NotImplementedError
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return self.__class__ == other.__class__ and repr(self) == repr(other)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(repr(self))
 
-    def to_alphanumeric(self):
+    def to_alphanumeric(self) -> str:
         name = str(self.strip_namespaces())
 
         # Replace references/pointers with words
@@ -274,7 +271,7 @@ class TypeName(ABC):
 
 
 @final
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, repr=False)
 class Tuple(TypeName):
     """
     A tuple type, such as ``(u8, u8)``. This must not empty (use Unit.unit
@@ -282,18 +279,18 @@ class Tuple(TypeName):
     """
     elements: tuple[TypeName, ...]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if len(self.elements) == 0:
             raise ValueError("Tuple must have at least one element")
 
-    def __str__(self): return f'({", ".join(map(str, self.elements))})'
+    def __repr__(self) -> str: return f'({", ".join(map(str, self.elements))})'
 
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(Tuple(tuple(e.apply_recursive(f) for e in self.elements)))
 
 
 @final
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, repr=False)
 class Reference(TypeName):
     """
     A pointer or reference type, such as ``&mut Foo``
@@ -302,7 +299,7 @@ class Reference(TypeName):
     mutable: bool
     pointee: TypeName
 
-    def __str__(self):
+    def __repr__(self) -> str:
         prefix = '*' if self.is_pointer else '&'
         if self.mutable:
             prefix += 'mut '
@@ -310,7 +307,7 @@ class Reference(TypeName):
         # here for concision
         return f'{prefix}{self.pointee}'
 
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(Reference(
             self.is_pointer, self.mutable,
             self.pointee.apply_recursive(f)
@@ -318,35 +315,35 @@ class Reference(TypeName):
 
 
 @final
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, repr=False)
 class TraitObject(TypeName):
     """
     A trait object, such as ``dyn Foo``
     """
     trait: Name
 
-    def __str__(self): return f'dyn {self.trait}'
+    def __repr__(self) -> str: return f'dyn {self.trait}'
 
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(TraitObject(self.trait))
 
 
 @final
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, repr=False)
 class Slice(TypeName):
     """
     A slice type, such as ``[u8]``
     """
     pointee: TypeName
 
-    def __str__(self): return f'[{self.pointee}]'
+    def __repr__(self) -> str: return f'[{self.pointee}]'
 
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(Slice(self.pointee.apply_recursive(f)))
 
 
 @final
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, repr=False)
 class Array(TypeName):
     """
     A (statically sized) array type, such as ``[u8;256]``
@@ -354,22 +351,22 @@ class Array(TypeName):
     element_type: TypeName
     size: int
 
-    def __str__(self): return f'[{self.element_type} ; {self.size}]'
+    def __repr__(self) -> str: return f'[{self.element_type} ; {self.size}]'
 
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(Array(self.element_type.apply_recursive(f), self.size))
 
 
 @final
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, repr=False)
 class TraitImpl(TypeName):
     trait: Name
     implementing_type: TypeName
 
-    def __str__(self):
+    def __repr__(self) -> str:
         return f'{self.implementing_type} as {self.trait}'
 
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(TraitImpl(
             self.trait,
             self.implementing_type.apply_recursive(f)
@@ -377,7 +374,7 @@ class TraitImpl(TypeName):
 
 
 @final
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, repr=False)
 class FunctionPointer(TypeName):
     """
     A function pointer such as ``fn(u8,u8)->u16``
@@ -385,10 +382,10 @@ class FunctionPointer(TypeName):
     params: tuple[TypeName, ...]
     return_type: TypeName
 
-    def __str__(self):
+    def __repr__(self) -> str:
         return f'fn({", ".join(map(str, self.params))}) -> {self.return_type}'
 
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(FunctionPointer(
             tuple(p.apply_recursive(f) for p in self.params),
             self.return_type.apply_recursive(f)
@@ -396,7 +393,7 @@ class FunctionPointer(TypeName):
 
 
 @final
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, repr=False)
 class Name(TypeName):
     """
     A namespaced identifier (possibly with generic arguments) such as
@@ -410,13 +407,13 @@ class Name(TypeName):
     name: str | None
     generic_args: tuple[TypeName, ...]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.name is None and len(self.generic_args) != 1:
             raise ValueError("Invalid bracketed name")
         if self.name is not None and self.name == '':
             raise ValueError("Name must not be empty")
 
-    def __str__(self):
+    def __repr__(self) -> str:
         namespace_part = f'{str(self.namespace)}::' if self.namespace else ''
         name_part = '' if self.name is None else self.name
         template_part = "" if not self.generic_args \
@@ -424,19 +421,20 @@ class Name(TypeName):
 
         return f'{namespace_part}{name_part}{template_part}'
 
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(Name(
-            self.namespace,
+            Name.create(self.namespace.apply_recursive(f)) if self.namespace is not None else None,
             self.name,
             tuple(a.apply_recursive(f) for a in self.generic_args)
         ))
 
-    def in_namespace(self, parent: Name | None):
+    def in_namespace(self, parent: Name | None) -> Name:
         if parent is None:
             return self
 
         if self.namespace is not None:
             parent = self.namespace.in_namespace(parent)
+
         return Name(
             parent,
             self.name,
@@ -487,14 +485,12 @@ class Unit(TypeName):
         """
     unit: Unit
 
-    def __str__(self): return '()'
+    def __init__(self) -> None: raise RuntimeError("Use Unit.unit")
 
-    def __repr__(self): return 'Unit'
+    def __repr__(self) -> str: return '()'
 
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(self)
-
-    def __init__(self): raise RuntimeError("Use Unit.unit")
 
 
 @final
@@ -504,32 +500,27 @@ class Never(TypeName):
     """
     never: Never
 
-    def __str__(self): return '!'
+    def __repr__(self) -> str: return '!'
 
-    def __repr__(self): return 'Never'
-
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(self)
 
-    def __init__(self): raise RuntimeError("Use Never.never")
+    def __init__(self) -> None: raise RuntimeError("Use Never.never")
 
 
-# noinspection PyFinal
 @final
-class Unknown(Name):
+class Unknown(TypeName):
     """
     Represents an unknown type
     """
     unknown: Unknown
 
-    def __str__(self): return '?'
+    def __repr__(self) -> str: return '?'
 
-    def __repr__(self): return '?'
-
-    def apply_recursive(self, f: Callable[[TypeName], TypeName]):
+    def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
         return f(self)
 
-    def __init__(self): raise RuntimeError("Use Unknown.unknown")
+    def __init__(self) -> None: raise RuntimeError("Use Unknown.unknown")
 
 
 # noinspection PyTypeChecker
