@@ -1,9 +1,37 @@
 from re import Pattern, Match
-from typing import TypeVar, Callable, Iterable, overload
+from typing import TypeVar, Callable, Iterable, overload, Generic, Iterator
 
-__all__ = ["closure", "filter_none", "CharStream"]
+__all__ = ["closure", "filter_none", "CharStream", "dset"]
 
 T = TypeVar("T")
+
+
+# noinspection PyPep8Naming
+class dset(Generic[T]):
+    """
+    A deterministic set. This is literally just a builtin dict with None values, and has the same
+    behavior and guarantees.
+
+    Use `set_items()` to get the items in the set. This is equivalent to `keys()` but more readable
+
+    This provides set methods such `add` and `extend`
+    """
+
+    def __init__(self, iterable: Iterable[T] = ()):
+        self.dict: dict[T, None] = {i: None for i in iterable}
+
+    def __iter__(self) -> Iterator[T]:
+        return iter(self.dict.keys())
+
+    def add(self, item: T) -> None:
+        self.dict[item] = None
+
+    def extend(self, iterable: Iterable[T]) -> None:
+        for i in iterable:
+            self.add(i)
+
+    def __bool__(self) -> bool:
+        return len(self.dict) > 0
 
 
 def closure(
@@ -18,21 +46,21 @@ def closure(
             on_find(y)
 
     # Use dict instead of set to preserve order between closure iterations and ensure determinism
-    res: dict[T, None] = dict((i, None) for i in s)
-    edge: dict[T, None] = dict(res)
+    res: dset[T] = dset(s)
+    edge: dset[T] = dset(res)
     while edge:
         if on_cycle:
             on_cycle()
-        old_edge = list(edge.keys())
-        edge = dict()
+        old_edge = list(edge)
+        edge = dset()
         for x in old_edge:
             for y in find(x):
                 if y in res: continue
-                res[y] = None
-                edge[y] = None
+                res.add(y)
+                edge.add(y)
                 if on_find:
                     on_find(y)
-    return res.keys()
+    return res
 
 
 def filter_none(x: Iterable[T | None], /) -> Iterable[T]:

@@ -2,15 +2,13 @@ import os
 import re
 import subprocess
 import sys
-from typing import Generator, cast
+from typing import Generator
 
 from scripts.helpers.files import *
 from scripts.helpers.misc_utils import *
 from scripts.helpers.parse_decompiled import *
 from scripts.helpers.parse_dwarf import *
-from scripts.helpers.parse_dwarf import DEnum, DStruct
 from scripts.helpers.typename import *
-from scripts.helpers.typename import TypeName
 
 print('Decompiling')
 if not os.path.isfile(file_wasm_debug):
@@ -89,13 +87,13 @@ dwarf_enums: dict[TypeName, DEnum] = {
     for i in dwarf_parser.enums
 }
 
-impls: dict[TraitObject, set[TypeName]] = {}
+impls: dict[TraitObject, dset[TypeName]] = {}
 
 
 def find_trait_impls(t: TypeName) -> TypeName:
     # print(t)
     if isinstance(t, TraitImpl):
-        impls.setdefault(TraitObject(t.trait), set()).add(t.implementing_type)
+        impls.setdefault(TraitObject(t.trait), dset()).add(t.implementing_type)
     return t
 
 
@@ -104,7 +102,7 @@ for type in dwarf_structs.values():
 
 print(impls)
 
-used_names: set[TypeName] = set()
+used_names: dset[TypeName] = dset()
 for exported_var in exported_vars:
     if exported_var.link_name not in dwarf_vars: continue
     used_names.add(unwrap_simply_derived_type(dwarf_vars[exported_var.link_name].type))
