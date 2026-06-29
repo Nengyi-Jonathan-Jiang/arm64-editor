@@ -4,7 +4,7 @@ import re
 from re import compile as r
 from typing import Callable, final
 
-from scripts.helpers.misc_utils import CharStream
+from .misc_utils import CharStream
 
 __all__ = [
     "unwrap_simply_derived_type",

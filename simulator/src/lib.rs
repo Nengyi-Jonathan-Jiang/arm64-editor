@@ -1,4 +1,6 @@
 #![no_std]
+#![allow(incomplete_features)]
+#![feature(generic_const_exprs)]
 
 // Enable std if we are testing
 #[cfg(test)]
@@ -51,6 +53,6 @@ const _: () = {
         #[cfg(target_arch = "wasm32")]
         core::arch::wasm32::unreachable();
         #[cfg(not(target_arch = "wasm32"))]
-        core::intrinsics::abort();
+        loop {}
     }
 };

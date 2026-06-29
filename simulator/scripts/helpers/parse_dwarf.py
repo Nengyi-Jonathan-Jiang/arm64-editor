@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from typing import Generator, Callable, final
 
-from scripts.helpers.typename import *
+from .typename import *
 
 __all__ = [
     "DFunc", "DVar", "DStruct", "DStructMember", "DEnum", "DEnumDiscriminant", "DEnumVariant",

@@ -1,6 +1,6 @@
-use crate::components::cache::DummyCache;
+use crate::components::mem_access::DummyMemoryAccess;
 use crate::components::pipeline::DummyPipeline;
-use crate::components::{BranchPredictor, Cache, Memory, Pipeline, Simulator, branch_predictor};
+use crate::components::{BranchPredictor, MemoryAccess, Pipeline, Simulator, branch_predictor};
 use crate::params::{
     BranchPredictorParams, CacheParams, DynamicBranchPredictor, PipelineMode, PipelineParams,
     SimulatorParams,
@@ -52,7 +52,7 @@ fn alloc_pipeline(params: PipelineParams) -> UnsafeMutRef<dyn Pipeline> {
     // }
 }
 
-fn alloc_cache(params: CacheParams) -> UnsafeMutRef<dyn Cache> {
+fn alloc_cache(params: CacheParams) -> UnsafeMutRef<dyn MemoryAccess> {
     let CacheParams {
         associativity,
         block_size_log,
@@ -62,7 +62,7 @@ fn alloc_cache(params: CacheParams) -> UnsafeMutRef<dyn Cache> {
     } = params;
 
     // TODO: un-dummy this
-    DummyCache::new()
+    DummyMemoryAccess::new()
 }
 
 fn alloc_branch_predictor(params: BranchPredictorParams) -> UnsafeMutRef<dyn BranchPredictor> {
@@ -98,10 +98,7 @@ fn alloc_simulator() -> Simulator {
     Simulator::new(
         alloc_pipeline(pipeline_params),
         alloc_cache(cache_params),
-        alloc_branch_predictor(branch_prediction),
-        Memory {
-            mem: dynamic::append_slice(0),
-        },
+        alloc_branch_predictor(branch_prediction)
     )
 }
 
@@ -121,10 +118,10 @@ mod dynamic {
     use crate::unsafe_ref::UnsafeMutRef;
     use crate::wasm::wasm_mutex::Mutex;
 
-    type Ptr = *mut ();
+    type _Ptr = *mut ();
 
-    static CURR_LIMIT: Mutex<Ptr> = Mutex::new(heap_base());
-    static CURR_END: Mutex<Ptr> = Mutex::new(heap_base());
+    static CURR_LIMIT: Mutex<_Ptr> = Mutex::new(heap_base());
+    static CURR_END: Mutex<_Ptr> = Mutex::new(heap_base());
 
     /// Allocate the given number of bytes on the heap with the given alignment, returning a pointer
     /// to the allocated (uninitialized) memory
@@ -177,14 +174,17 @@ mod dynamic {
     unsafe extern "C" {
         /// Links to a symbol defined by the linker that marks the beginning of the heap
         static __heap_base: u8;
+    }
 
+    #[link(wasm_import_module = "env")]
+    unsafe extern "C" {
         /// Requests JS to expand WASM memory to fit the pointer given. This returns the new memory
         /// limit if the operations succeeded and a null pointer otherwise
-        fn request_enough_mem_for_ptr(ptr: Ptr) -> Ptr;
+        fn request_enough_mem_for_ptr(ptr: _Ptr) -> _Ptr;
     }
 
     #[allow(unused_unsafe)] // TODO: why does cargo check warn about this?
-    const fn heap_base() -> Ptr {
-        (unsafe { &raw const __heap_base }) as Ptr
+    const fn heap_base() -> _Ptr {
+        (unsafe { &raw const __heap_base }) as _Ptr
     }
 }

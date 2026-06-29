@@ -19,11 +19,6 @@ export const module : {
     
     /**
      * - WASM type: `int`
-     */
-    readonly heap_base: number;
-    
-    /**
-     * - WASM type: `int`
      * - Rust name: `simulator::wasm::globals::SIMULATOR`
      * - Rust type: {@link Mutex_Option_Simulator `Mutex<Option<Simulator>>`}
      */
@@ -37,16 +32,11 @@ export const module : {
     readonly panicBufferLen: number;
     
     /**
-     * - WASM type: `int`
-     */
-    readonly data_end: number;
-    
-    /**
      * - Rust return type: {@link Simulator `Simulator`}
      * - Rust name: `simulator::wasm::globals::alloc_simulator`
      * @param a
      *      - Converted from RVO return value
-     *      - WASM type: `int_ptr`
+     *      - WASM type: `{ a:int, b:int, c:int, d:int, e:int, f:int }`
      *      - Rust type: {@link Simulator `&mut Simulator`}
      */
     allocSimulator(a: number): void;
@@ -80,28 +70,27 @@ export namespace types {
     
     /**
      * - Name: `Mutex<Option<Simulator>>`
-     * - Size: `296`
+     * - Size: `1056`
      * 
      * Fields:
-     * | Name     | @     | Type                                                                |
-     * | -------- | ----- | ------------------------------------------------------------------- |
-     * | `data`   | `0`   | {@link UnsafeCell_Option_Simulator `UnsafeCell<Option<Simulator>>`} |
-     * | `locked` | `288` | {@link UnsafeCell_bool `UnsafeCell<bool>`}                          |
+     * | Name     | @      | Type                                                                |
+     * | -------- | ------ | ------------------------------------------------------------------- |
+     * | `data`   | `0`    | {@link UnsafeCell_Option_Simulator `UnsafeCell<Option<Simulator>>`} |
+     * | `locked` | `1048` | {@link UnsafeCell_bool `UnsafeCell<bool>`}                          |
      */
     type Mutex_Option_Simulator = any;
     
     /**
      * - Name: `Simulator`
-     * - Size: `288`
+     * - Size: `1048`
      * 
      * Fields:
-     * | Name               | @     | Type                                                                         |
-     * | ------------------ | ----- | ---------------------------------------------------------------------------- |
-     * | `pipeline`         | `0`   | {@link UnsafeMutRef_dyn_Pipeline `UnsafeMutRef<dyn Pipeline>`}               |
-     * | `cache`            | `8`   | {@link UnsafeMutRef_dyn_Cache `UnsafeMutRef<dyn Cache>`}                     |
-     * | `branch_predictor` | `16`  | {@link UnsafeMutRef_dyn_BranchPredictor `UnsafeMutRef<dyn BranchPredictor>`} |
-     * | `registers`        | `24`  | `[u64 ; 32]`                                                                 |
-     * | `memory`           | `280` | {@link Memory `Memory`}                                                      |
+     * | Name               | @    | Type                                                                         |
+     * | ------------------ | ---- | ---------------------------------------------------------------------------- |
+     * | `pipeline`         | `0`  | {@link UnsafeMutRef_dyn_Pipeline `UnsafeMutRef<dyn Pipeline>`}               |
+     * | `cache`            | `8`  | {@link UnsafeMutRef_dyn_MemoryAccess `UnsafeMutRef<dyn MemoryAccess>`}       |
+     * | `branch_predictor` | `16` | {@link UnsafeMutRef_dyn_BranchPredictor `UnsafeMutRef<dyn BranchPredictor>`} |
+     * | `registers`        | `24` | `[u64 ; 128]`                                                                |
      */
     type Simulator = any;
     
@@ -147,7 +136,7 @@ export namespace types {
     
     /**
      * - Name: `UnsafeCell<Option<Simulator>>`
-     * - Size: `288`
+     * - Size: `1048`
      * 
      * Fields:
      * | Name    | @   | Type                                         |
@@ -179,15 +168,15 @@ export namespace types {
     type UnsafeMutRef_dyn_Pipeline = any;
     
     /**
-     * - Name: `UnsafeMutRef<dyn Cache>`
+     * - Name: `UnsafeMutRef<dyn MemoryAccess>`
      * - Size: `8`
      * 
      * Fields:
-     * | Name  | @   | Type                                       |
-     * | ----- | --- | ------------------------------------------ |
-     * | `ptr` | `0` | {@link ptr_mut_dyn_Cache `*mut dyn Cache`} |
+     * | Name  | @   | Type                                                     |
+     * | ----- | --- | -------------------------------------------------------- |
+     * | `ptr` | `0` | {@link ptr_mut_dyn_MemoryAccess `*mut dyn MemoryAccess`} |
      */
-    type UnsafeMutRef_dyn_Cache = any;
+    type UnsafeMutRef_dyn_MemoryAccess = any;
     
     /**
      * - Name: `UnsafeMutRef<dyn BranchPredictor>`
@@ -199,17 +188,6 @@ export namespace types {
      * | `ptr` | `0` | {@link ptr_mut_dyn_BranchPredictor `*mut dyn BranchPredictor`} |
      */
     type UnsafeMutRef_dyn_BranchPredictor = any;
-    
-    /**
-     * - Name: `Memory`
-     * - Size: `8`
-     * 
-     * Fields:
-     * | Name  | @   | Type                                         |
-     * | ----- | --- | -------------------------------------------- |
-     * | `mem` | `0` | {@link UnsafeMutRef_u8 `UnsafeMutRef<[u8]>`} |
-     */
-    type Memory = any;
     
     /**
      * - Name: `CachePolicy`
@@ -322,7 +300,7 @@ export namespace types {
     
     /**
      * - Name: `Option<Simulator>`
-     * - Size: `288`
+     * - Size: `1048`
      * - Discriminant layout: `u32` @ `4`
      * 
      * Variants:
@@ -353,18 +331,18 @@ export namespace types {
     type ptr_mut_dyn_Pipeline = any;
     
     /**
-     * - Name: `*mut dyn Cache`
+     * - Name: `*mut dyn MemoryAccess`
      * - Size: `8`
      * 
      * Fields:
-     * | Name      | @   | Type                                       |
-     * | --------- | --- | ------------------------------------------ |
-     * | `pointer` | `0` | {@link ptr_mut_dyn_Cache `*mut dyn Cache`} |
-     * | `vtable`  | `4` | `&[usize ; 5]`                             |
+     * | Name      | @   | Type                                                     |
+     * | --------- | --- | -------------------------------------------------------- |
+     * | `pointer` | `0` | {@link ptr_mut_dyn_MemoryAccess `*mut dyn MemoryAccess`} |
+     * | `vtable`  | `4` | `&[usize ; 5]`                                           |
      * 
-     * Implementations: {@link DummyCache `DummyCache`}
+     * Implementations: {@link DummyMemoryAccess `DummyMemoryAccess`}
      */
-    type ptr_mut_dyn_Cache = any;
+    type ptr_mut_dyn_MemoryAccess = any;
     
     /**
      * - Name: `*mut dyn BranchPredictor`
@@ -376,20 +354,9 @@ export namespace types {
      * | `pointer` | `0` | {@link ptr_mut_dyn_BranchPredictor `*mut dyn BranchPredictor`} |
      * | `vtable`  | `4` | `&[usize ; 7]`                                                 |
      * 
-     * Implementations: {@link Predictor0 `Predictor0`}, {@link Predictor2 `Predictor2`}, {@link Predictor1 `Predictor1`}
+     * Implementations: {@link Predictor0 `Predictor0`}, {@link Predictor1 `Predictor1`}, {@link Predictor2 `Predictor2`}
      */
     type ptr_mut_dyn_BranchPredictor = any;
-    
-    /**
-     * - Name: `UnsafeMutRef<[u8]>`
-     * - Size: `8`
-     * 
-     * Fields:
-     * | Name  | @   | Type                           |
-     * | ----- | --- | ------------------------------ |
-     * | `ptr` | `0` | {@link ptr_mut_u8 `*mut [u8]`} |
-     */
-    type UnsafeMutRef_u8 = any;
     
     /**
      * - Name: `DummyPipeline`
@@ -398,10 +365,10 @@ export namespace types {
     type DummyPipeline = any;
     
     /**
-     * - Name: `DummyCache`
+     * - Name: `DummyMemoryAccess`
      * - Size: `0`
      */
-    type DummyCache = any;
+    type DummyMemoryAccess = any;
     
     /**
      * - Name: `Predictor0`
@@ -415,17 +382,6 @@ export namespace types {
     type Predictor0 = any;
     
     /**
-     * - Name: `Predictor2`
-     * - Size: `12`
-     * 
-     * Fields:
-     * | Name   | @   | Type                                                     |
-     * | ------ | --- | -------------------------------------------------------- |
-     * | `base` | `0` | {@link BranchPredictorBase_u8 `BranchPredictorBase<u8>`} |
-     */
-    type Predictor2 = any;
-    
-    /**
      * - Name: `Predictor1`
      * - Size: `12`
      * 
@@ -437,16 +393,15 @@ export namespace types {
     type Predictor1 = any;
     
     /**
-     * - Name: `*mut [u8]`
-     * - Size: `8`
+     * - Name: `Predictor2`
+     * - Size: `12`
      * 
      * Fields:
-     * | Name       | @   | Type      |
-     * | ---------- | --- | --------- |
-     * | `data_ptr` | `0` | `*mut u8` |
-     * | `length`   | `4` | `usize`   |
+     * | Name   | @   | Type                                                     |
+     * | ------ | --- | -------------------------------------------------------- |
+     * | `base` | `0` | {@link BranchPredictorBase_u8 `BranchPredictorBase<u8>`} |
      */
-    type ptr_mut_u8 = any;
+    type Predictor2 = any;
     
     /**
      * - Name: `BranchPredictorBase<()>`
@@ -461,18 +416,6 @@ export namespace types {
     type BranchPredictorBase = any;
     
     /**
-     * - Name: `BranchPredictorBase<u8>`
-     * - Size: `12`
-     * 
-     * Fields:
-     * | Name          | @   | Type                                                            |
-     * | ------------- | --- | --------------------------------------------------------------- |
-     * | `bht`         | `0` | {@link UnsafeMutRef_BhtEntry_u8 `UnsafeMutRef<[BhtEntry<u8>]>`} |
-     * | `static_mode` | `8` | {@link StaticBranchPredictionMode `StaticBranchPredictionMode`} |
-     */
-    type BranchPredictorBase_u8 = any;
-    
-    /**
      * - Name: `BranchPredictorBase<bool>`
      * - Size: `12`
      * 
@@ -483,6 +426,18 @@ export namespace types {
      * | `static_mode` | `8` | {@link StaticBranchPredictionMode `StaticBranchPredictionMode`}     |
      */
     type BranchPredictorBase_bool = any;
+    
+    /**
+     * - Name: `BranchPredictorBase<u8>`
+     * - Size: `12`
+     * 
+     * Fields:
+     * | Name          | @   | Type                                                            |
+     * | ------------- | --- | --------------------------------------------------------------- |
+     * | `bht`         | `0` | {@link UnsafeMutRef_BhtEntry_u8 `UnsafeMutRef<[BhtEntry<u8>]>`} |
+     * | `static_mode` | `8` | {@link StaticBranchPredictionMode `StaticBranchPredictionMode`} |
+     */
+    type BranchPredictorBase_u8 = any;
     
     /**
      * - Name: `UnsafeMutRef<[BhtEntry<()>]>`
@@ -496,17 +451,6 @@ export namespace types {
     type UnsafeMutRef_BhtEntry = any;
     
     /**
-     * - Name: `UnsafeMutRef<[BhtEntry<u8>]>`
-     * - Size: `8`
-     * 
-     * Fields:
-     * | Name  | @   | Type                                              |
-     * | ----- | --- | ------------------------------------------------- |
-     * | `ptr` | `0` | {@link ptr_mut_BhtEntry_u8 `*mut [BhtEntry<u8>]`} |
-     */
-    type UnsafeMutRef_BhtEntry_u8 = any;
-    
-    /**
      * - Name: `UnsafeMutRef<[BhtEntry<bool>]>`
      * - Size: `8`
      * 
@@ -516,6 +460,17 @@ export namespace types {
      * | `ptr` | `0` | {@link ptr_mut_BhtEntry_bool `*mut [BhtEntry<bool>]`} |
      */
     type UnsafeMutRef_BhtEntry_bool = any;
+    
+    /**
+     * - Name: `UnsafeMutRef<[BhtEntry<u8>]>`
+     * - Size: `8`
+     * 
+     * Fields:
+     * | Name  | @   | Type                                              |
+     * | ----- | --- | ------------------------------------------------- |
+     * | `ptr` | `0` | {@link ptr_mut_BhtEntry_u8 `*mut [BhtEntry<u8>]`} |
+     */
+    type UnsafeMutRef_BhtEntry_u8 = any;
     
     /**
      * - Name: `*mut [BhtEntry<()>]`
@@ -530,18 +485,6 @@ export namespace types {
     type ptr_mut_BhtEntry = any;
     
     /**
-     * - Name: `*mut [BhtEntry<u8>]`
-     * - Size: `8`
-     * 
-     * Fields:
-     * | Name       | @   | Type                                    |
-     * | ---------- | --- | --------------------------------------- |
-     * | `data_ptr` | `0` | {@link BhtEntry_u8 `*mut BhtEntry<u8>`} |
-     * | `length`   | `4` | `usize`                                 |
-     */
-    type ptr_mut_BhtEntry_u8 = any;
-    
-    /**
      * - Name: `*mut [BhtEntry<bool>]`
      * - Size: `8`
      * 
@@ -552,6 +495,18 @@ export namespace types {
      * | `length`   | `4` | `usize`                                     |
      */
     type ptr_mut_BhtEntry_bool = any;
+    
+    /**
+     * - Name: `*mut [BhtEntry<u8>]`
+     * - Size: `8`
+     * 
+     * Fields:
+     * | Name       | @   | Type                                    |
+     * | ---------- | --- | --------------------------------------- |
+     * | `data_ptr` | `0` | {@link BhtEntry_u8 `*mut BhtEntry<u8>`} |
+     * | `length`   | `4` | `usize`                                 |
+     */
+    type ptr_mut_BhtEntry_u8 = any;
     
     /**
      * - Name: `BhtEntry<()>`
@@ -566,18 +521,6 @@ export namespace types {
     type BhtEntry = any;
     
     /**
-     * - Name: `BhtEntry<u8>`
-     * - Size: `16`
-     * 
-     * Fields:
-     * | Name                   | @   | Type  |
-     * | ---------------------- | --- | ----- |
-     * | `last_indirect_target` | `0` | `u64` |
-     * | `data`                 | `8` | `u8`  |
-     */
-    type BhtEntry_u8 = any;
-    
-    /**
      * - Name: `BhtEntry<bool>`
      * - Size: `16`
      * 
@@ -588,6 +531,18 @@ export namespace types {
      * | `data`                 | `8` | `bool` |
      */
     type BhtEntry_bool = any;
+    
+    /**
+     * - Name: `BhtEntry<u8>`
+     * - Size: `16`
+     * 
+     * Fields:
+     * | Name                   | @   | Type  |
+     * | ---------------------- | --- | ----- |
+     * | `last_indirect_target` | `0` | `u64` |
+     * | `data`                 | `8` | `u8`  |
+     */
+    type BhtEntry_u8 = any;
 }
 
 export default module;

@@ -4,11 +4,11 @@ import subprocess
 import sys
 from typing import Generator
 
-from scripts.helpers.files import *
-from scripts.helpers.misc_utils import *
-from scripts.helpers.parse_decompiled import *
-from scripts.helpers.parse_dwarf import *
-from scripts.helpers.typename import *
+from helpers.files import *
+from helpers.misc_utils import *
+from helpers.parse_decompiled import *
+from helpers.parse_dwarf import *
+from helpers.typename import *
 
 print('Decompiling')
 if not os.path.isfile(file_wasm_debug):

@@ -2,8 +2,9 @@
 
 Required:
 
-- Rust and `cargo`
-- `wabt` (for WebAssembly-specific optimization passes)
+- Rust and `cargo` (`nightly` build, `wasm32-unknown-unknown` target)
+- [`wabt`](https://github.com/webassembly/wabt) and [`binaryen`](https://github.com/WebAssembly/binaryen) (for
+  WebAssembly-specific optimization passes)
 - Either `bash` or `python` (used by build scripts)
 
 Optional:
@@ -11,9 +12,8 @@ Optional:
 - `python` to regenerate TypeScript definitions. This is highly recommended for
   reasons described below
 - [`llvm-dwarfdump`](https://github.com/llvm) enables generation of more
-  detailed TypeScript type
-  information. This is also highly recommended for the same reason
-- [`cargo make`](https://github.com/sagiegurari/cargo-make) to run the full
+  detailed TypeScript type information. This is also highly recommended for the same reason.
+- [`cargo-make`](https://github.com/sagiegurari/cargo-make) to run the full
   build with one command
 
 # Building

@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::transmute_assertions::TransmuteAssertions;
 use core::ops::{Deref, DerefMut};
 // TODO: figure out if and how we can restruct how long pointee of UnsafeRef needs to live
