@@ -18,6 +18,7 @@ mod transmute_assertions;
 mod unsafe_ref;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
+mod const_bound;
 // Without wasm panic handler we also have to define our own
 
 #[cfg(not(test))]

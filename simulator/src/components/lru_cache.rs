@@ -1,24 +1,41 @@
-struct LRUCache<T, const N: usize, M: LRUMatrix<N>> {
-    matrix: M,
+use crate::const_bound::const_bound;
+
+trait Cache<T> {
+    /// Search for an entry satisfying the given predicate. The specific kind of cache may dictate
+    /// which entry is returned if multiple entries satisfy the predicate.
+    fn get(&mut self, cond: impl FnMut(&T) -> bool) -> Option<&mut T>;
+    /// Get a mutable reference to an entry to replace. The specific kind of cache may dictate which
+    /// entry this should be; in general this is an entry that is less likely to be accessed in the
+    /// future
+    fn get_replaceable(&mut self) -> &mut T;
+}
+
+struct LRUCache<T, const N: usize, S: LRUState<N>> {
+    state: S,
     data: [T; N],
     lru: usize,
 }
-impl<T: Copy, const N: usize, M: LRUMatrix<N>> LRUCache<T, N, M> {
-    pub fn new(matrix: M, mut initial_data: impl FnMut() -> T) -> Self {
+
+impl<T, const N: usize, S: LRUState<N>> LRUCache<T, N, S> {
+    pub fn new_with_state(state: S, mut initial_data: impl FnMut() -> T) -> Self {
         Self {
-            matrix,
+            state,
             data: core::array::from_fn(|_| initial_data()),
             lru: 0, // Arbitrary, but 0 is fine.
         }
     }
+}
 
-    /// Get an entry satisfying the given predicate, if it exists. It is not guaranteed which entry
-    /// is returned if multiple entries satisfy the predicate, although this is a deterministic
-    /// function of the previous accesses to the cache modulo sequential access to the same entry.
-    pub fn get(&mut self, mut cond: impl FnMut(&T) -> bool) -> Option<&mut T> {
+impl<T, const N: usize, S: LRUState<N>> Cache<T> for LRUCache<T, N, S> {
+    /// See [`Cache::get`]
+    ///
+    /// The entry returned when multiple entries satisfy the predicate is only guaranteed to be a
+    /// deterministic function of the previous accesses to the cache, modulo consecutive access to
+    /// the same entry.
+    fn get(&mut self, mut cond: impl FnMut(&T) -> bool) -> Option<&mut T> {
         for i in 0..N {
             if cond(&self.data[i]) {
-                self.lru = self.matrix.update(i);
+                self.lru = self.state.update(i);
                 return Some(&mut self.data[i]);
             }
         }
@@ -26,73 +43,107 @@ impl<T: Copy, const N: usize, M: LRUMatrix<N>> LRUCache<T, N, M> {
         None
     }
 
-    /// Get a mutable reference to the least recently used entry.
-    pub fn get_lru(&mut self) -> &mut T {
+    /// See [`Cache::get_replaceable`]
+    ///
+    /// Get a mutable to the least recently used element to replace.
+    fn get_replaceable(&mut self) -> &mut T {
         let res = &mut self.data[self.lru];
-        self.lru = self.matrix.update(self.lru);
+        self.lru = self.state.update(self.lru);
         res
     }
 }
 
-trait LRUMatrix<const ASSOCIATIVITY: usize> {
-    /// Access the given element (0 <= access < Associativity) and return the new least recently
-    /// used element
-    fn update(&mut self, access: usize) -> usize;
+impl<T: Default, const N: usize> LRUCache<T, N, MatrixLRUState<N>>
+where
+    const_bound!(0 < N <= 8):,
+{
+    fn new(initial_data: impl FnMut() -> T) -> Self {
+        Self::new_with_state(Default::default(), initial_data)
+    }
+}
+
+impl<T: Default, const N: usize> Default for LRUCache<T, N, MatrixLRUState<N>>
+where
+    const_bound!(0 < N <= 8):,
+{
+    fn default() -> Self {
+        Self::new(|| Default::default())
+    }
+}
+
+/// A data structure that tracks the least recently used element out of a fixed set of `N` elements
+/// encoded as integers from `0` to `N - 1`
+trait LRUState<const N: usize> {
+    /// Access the given element (`0 ≤ access < N`) and return the new least recently used element
+    fn update(&mut self, n: usize) -> usize;
 }
 
 /// Implementation of an LRU cache up to associativity 8 using a bit matrix
-struct SimpleLRUMatrix<const ASSOCIATIVITY: usize> {
+struct MatrixLRUState<const N: usize>
+where
+    const_bound!(0 < N <= 8):,
+{
+    /// Invariant: when interpreted as an 8 x 8 matrix of bits in row major order and considering
+    /// only the top left N x N submatrix, the bit at row r, col c is set iff element c was accessed
+    /// more recently than element r
     matrix: u64,
 }
 
-impl<const A: usize> Default for SimpleLRUMatrix<A> {
+impl<const N: usize> Default for MatrixLRUState<N>
+where
+    const_bound!(0 < N <= 8):,
+{
     fn default() -> Self {
+        // The zero matrix trivially satisfies the invariant -- it represents the case where no
+        // element was accessed more recently than any other element
         Self { matrix: 0 }
     }
 }
 
-macro_rules! get_mask {
-    ($n:expr) => {
-        (2u64 << (($n) - 1)).wrapping_sub(1)
-    };
-}
-
-impl<const A: usize> LRUMatrix<A> for SimpleLRUMatrix<A>
+impl<const N: usize> LRUState<N> for MatrixLRUState<N>
 where
-    [(); A - 1]:,
-    [(); 8 - A]:,
+    const_bound!(0 < N <= 8):,
 {
-    fn update(&mut self, access: usize) -> usize {
-        assert!(access < A);
+    fn update(&mut self, n: usize) -> usize {
+        assert!(n < N);
 
-        // Generate masks to make fixed matrix size work with variable A
-        let row_mask: u64 = !get_mask!(A * 8);
-        let col_mask: u64 = {
-            let mut mask = get_mask!(A);
-            mask |= mask << 8; // spread using recursive doubling
-            mask |= mask << 16;
-            mask |= mask << 32;
-            mask
-        };
+        /// Get a 64-bit mask for the first `n` bits, where `1 ≤ n ≤ 64`. Values outside this range
+        /// are wrapped (as in modular arithmetic).
+        fn get_mask(n: usize) -> u64 {
+            // Put a 1 in the `n`th bit (one-indexed)
+            let p = 0x_8000_0000_0000_0000_u64.rotate_left(n as u32);
+            // Spread to all lower bits
+            p | (p - 1)
+        }
 
-        // Update matrix
-        let mut tmp: u64 = self.matrix; // Need; we do computations on matrix value later
-        tmp |= 0x0101010101010101u64 << access;
-        tmp &= !(0xffu64 << (access * 8));
-        self.matrix = tmp;
-        tmp = !tmp;
+        // Generate masks to extract submatrix
+        let row_mask: u64 = get_mask(N * 8);
+        let col_mask: u64 = get_mask(N);
 
-        // Mask out extra rows and columns of the matrix
-        tmp |= row_mask; // Put 1's in extra rows so the target can be identified
-        tmp &= col_mask; // Put 0's in extra columns to prevent wrong targets
+        // Set the nth column (this element was accessed more recently than all elements)
+        self.matrix |= 0x0101010101010101u64 << n;
+        // Unset the nth row (no element was accessed more recently than this element)
+        self.matrix &= !(0xffu64 << (n * 8));
 
-        // Recursive doubling to extract the target column that has all 1's
-        tmp &= tmp >> 32;
-        tmp &= tmp >> 16;
-        tmp &= tmp >> 8;
+        // We want to find a fully unset column (whose element was not accessed more recently than
+        // any element), which will be an LRU element.
+        //
+        // Due to the invariant, this will always exist. Since "used more recently than" is a strict
+        // partial order and the set of elements we are concered with is finite, there exists at
+        // least one element that was not "used more recently than" every other element. (This
+        // follows from the fact that every finite poset has at least one maximal element)
+        let mut tmp = self.matrix;
 
-        // The column with the 1 in it is the new LRU element
-        tmp.trailing_zeros() as usize
+        // Unset all but the first N rows
+        tmp &= row_mask;
+        // Bitor all rows to extract the target columns that has all 0's
+        tmp |= tmp >> 32;
+        tmp |= tmp >> 16;
+        tmp |= tmp >> 8;
+        // Unset all but the first N bits
+        tmp &= col_mask;
+        // The number of trailing ones is the index of the first zero column
+        tmp.trailing_ones() as usize
     }
 }
 
@@ -107,36 +158,111 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_lru_matrix_8() {
-        let mut cache = SimpleLRUMatrix::<8>::default();
-
-        //                      v-- LRU        MRU --v
-        cache_update!(cache <- 0, 5, 3, 6, 2, 7, 1, 4);
-
-        assert_eq!(cache.update(4), 0); // Does not change order
-        assert_eq!(cache.update(0), 5); // 5, 3, 6, 2, 7, 1, 4, 0
-        assert_eq!(cache.update(4), 5); // 5, 3, 6, 2, 7, 1, 0, 4
-        assert_eq!(cache.update(6), 5); // 5, 3, 2, 7, 1, 0, 4, 6
-
-        cache_update!(cache <- 0, 5, 3); // 2, 7, 1, 4, 6, 0, 5, 3
-
-        assert_eq!(cache.update(1), 2); // 2, 7, 4, 6, 0, 5, 3, 1
-        assert_eq!(cache.update(2), 7); // 7, 4, 6, 0, 5, 3, 1, 2
-        assert_eq!(cache.update(7), 4); // 4, 6, 0, 5, 3, 1, 2, 7
+    fn test_lru_state_matrix_1() {
+        let mut state = MatrixLRUState::<1>::default();
+        // It'd better always be 0
+        assert_eq!(state.update(0), 0);
+        assert_eq!(state.update(0), 0);
+        assert_eq!(state.update(0), 0);
     }
 
     #[test]
-    fn test_simple_lru_matrix_5() {
-        let mut cache = SimpleLRUMatrix::<5>::default();
+    fn test_lru_state_matrix_2() {
+        let mut state = MatrixLRUState::<2>::default();
+        assert_eq!(state.update(0), 1);
+        assert_eq!(state.update(0), 1);
+        assert_eq!(state.update(1), 0);
+        assert_eq!(state.update(1), 0);
+        assert_eq!(state.update(0), 1);
+    }
 
-        cache_update!(cache <- 0, 3, 2, 1, 4);
+    #[test]
+    fn test_lru_state_matrix_8() {
+        let mut state = MatrixLRUState::<8>::default();
 
-        assert_eq!(cache.update(4), 0); // Does not change order
-        assert_eq!(cache.update(0), 3); // 3, 2, 1, 4, 0
-        assert_eq!(cache.update(4), 3); // 3, 2, 1, 0, 4
-        assert_eq!(cache.update(0), 3); // 3, 2, 1, 4, 0
-        assert_eq!(cache.update(2), 3); // 3, 1, 4, 0, 2
-        assert_eq!(cache.update(3), 1); // 1, 4, 0, 2, 3
-        assert_eq!(cache.update(1), 4); // 4, 0, 2, 3, 1
+        //                      v-- LRU        MRU --v
+        cache_update!(state <- 0, 5, 3, 6, 2, 7, 1, 4);
+
+        assert_eq!(state.update(4), 0); // Does not change order
+        assert_eq!(state.update(0), 5); // 5, 3, 6, 2, 7, 1, 4, 0
+        assert_eq!(state.update(4), 5); // 5, 3, 6, 2, 7, 1, 0, 4
+        assert_eq!(state.update(6), 5); // 5, 3, 2, 7, 1, 0, 4, 6
+
+        cache_update!(state <- 0, 5, 3); // 2, 7, 1, 4, 6, 0, 5, 3
+
+        assert_eq!(state.update(1), 2); // 2, 7, 4, 6, 0, 5, 3, 1
+        assert_eq!(state.update(2), 7); // 7, 4, 6, 0, 5, 3, 1, 2
+        assert_eq!(state.update(7), 4); // 4, 6, 0, 5, 3, 1, 2, 7
+    }
+
+    #[test]
+    fn test_lru_state_matrix_5() {
+        let mut state = MatrixLRUState::<5>::default();
+
+        cache_update!(state <- 0, 3, 2, 1, 4);
+
+        assert_eq!(state.update(4), 0); // Does not change order
+        assert_eq!(state.update(0), 3); // 3, 2, 1, 4, 0
+        assert_eq!(state.update(4), 3); // 3, 2, 1, 0, 4
+        assert_eq!(state.update(0), 3); // 3, 2, 1, 4, 0
+        assert_eq!(state.update(2), 3); // 3, 1, 4, 0, 2
+        assert_eq!(state.update(3), 1); // 1, 4, 0, 2, 3
+        assert_eq!(state.update(1), 4); // 4, 0, 2, 3, 1
+    }
+
+    #[test]
+    fn test_lru_cache() {
+        // Cache is initialized with zeros
+        let mut c: LRUCache<u8, 6, _> = Default::default();
+        let cache = &mut c;
+
+        /// Get the entry in the cache with the given lower four bits
+        fn cache_get(cache: &mut impl Cache<u8>, target: u8) -> Option<u8> {
+            cache.get(|x| x & 0xf == target).cloned()
+        }
+        
+        assert_eq!(cache_get(cache, 0x0), Some(0));
+        assert_eq!(cache_get(cache, 0xe), None);
+        assert_eq!(cache_get(cache, 0x5), None);
+
+        *cache.get_replaceable() = 0xb5;
+
+        assert_eq!(cache_get(cache, 0x0), Some(0));
+        assert_eq!(cache_get(cache, 0xe), None);
+        assert_eq!(cache_get(cache, 0x5), Some(0xb5));
+
+        *cache.get_replaceable() = 0xce;
+
+        assert_eq!(cache_get(cache, 0x0), Some(0));
+        assert_eq!(cache_get(cache, 0xe), Some(0xce));
+        assert_eq!(cache_get(cache, 0x5), Some(0xb5));
+
+        //                       v--LRU          MRU--v
+        // Now cache should have 0, 0, 0, 0, 0xce, 0xb5
+
+        for _ in 0..4 { // Access the four LRU elements (0)
+            assert_eq!(*cache.get_replaceable(), 0);
+        }
+
+        // Now cache should have 0xce, 0xb5, 0, 0, 0, 0
+
+        let evicted = cache.get_replaceable();
+        assert_eq!(*evicted, 0xce); // This should return the spot where 0xce is stored
+        *evicted = 0x2f; // Replace 0xce with 0x2f
+
+        // Now cache should have 0xb5, 0, 0, 0, 0x2f
+
+        assert_eq!(cache_get(cache, 0xe), None);
+        assert_eq!(cache_get(cache, 0x5), Some(0xb5));
+        assert_eq!(cache_get(cache, 0xf), Some(0x2f));
+
+        // By renewing access to 0xb5 and 0x2f above, we should have put them back near the front
+        // Cache should have 0, 0, 0, 0, 0xb5, 0x2f
+
+        for _ in 0..4 {
+            assert_eq!(*cache.get_replaceable(), 0);
+        }
+        assert_eq!(*cache.get_replaceable(), 0xb5);
+        assert_eq!(*cache.get_replaceable(), 0x2f);
     }
 }
