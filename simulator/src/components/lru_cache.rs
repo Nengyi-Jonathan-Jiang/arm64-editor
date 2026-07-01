@@ -1,37 +1,29 @@
 use crate::const_bound::const_bound;
 
-trait Cache<T> {
-    /// Search for an entry satisfying the given predicate. The specific kind of cache may dictate
-    /// which entry is returned if multiple entries satisfy the predicate.
+pub trait LRUCache<T> {
+    /// Search for an entry satisfying the given predicate. If multiple entries satisfy the
+    /// predicate, there is no guarantee for which one is returned. The returned entry is promoted
+    /// to be the most recently used entry.
     fn get(&mut self, cond: impl FnMut(&T) -> bool) -> Option<&mut T>;
-    /// Get a mutable reference to an entry to replace. The specific kind of cache may dictate which
-    /// entry this should be; in general this is an entry that is less likely to be accessed in the
-    /// future
-    fn get_replaceable(&mut self) -> &mut T;
+
+    /// Get a mutable reference to the least recently used entry and promotes it to the most
+    /// recently used entry.
+    fn get_lru(&mut self) -> &mut T;
 }
 
-struct LRUCache<T, const N: usize, S: LRUState<N>> {
-    state: S,
+pub struct FixedSizeLRUCache<T, const N: usize>
+where
+    const_bound!(0 < N <= 8):,
+{
+    state: MatrixLRUState<N>,
     data: [T; N],
     lru: usize,
 }
 
-impl<T, const N: usize, S: LRUState<N>> LRUCache<T, N, S> {
-    pub fn new_with_state(state: S, mut initial_data: impl FnMut() -> T) -> Self {
-        Self {
-            state,
-            data: core::array::from_fn(|_| initial_data()),
-            lru: 0, // Arbitrary, but 0 is fine.
-        }
-    }
-}
-
-impl<T, const N: usize, S: LRUState<N>> Cache<T> for LRUCache<T, N, S> {
-    /// See [`Cache::get`]
-    ///
-    /// The entry returned when multiple entries satisfy the predicate is only guaranteed to be a
-    /// deterministic function of the previous accesses to the cache, modulo consecutive access to
-    /// the same entry.
+impl<T, const N: usize> LRUCache<T> for FixedSizeLRUCache<T, N>
+where
+    const_bound!(0 < N <= 8):,
+{
     fn get(&mut self, mut cond: impl FnMut(&T) -> bool) -> Option<&mut T> {
         for i in 0..N {
             if cond(&self.data[i]) {
@@ -43,26 +35,27 @@ impl<T, const N: usize, S: LRUState<N>> Cache<T> for LRUCache<T, N, S> {
         None
     }
 
-    /// See [`Cache::get_replaceable`]
-    ///
-    /// Get a mutable to the least recently used element to replace.
-    fn get_replaceable(&mut self) -> &mut T {
+    fn get_lru(&mut self) -> &mut T {
         let res = &mut self.data[self.lru];
         self.lru = self.state.update(self.lru);
         res
     }
 }
 
-impl<T: Default, const N: usize> LRUCache<T, N, MatrixLRUState<N>>
+impl<T: Default, const N: usize> FixedSizeLRUCache<T, N>
 where
     const_bound!(0 < N <= 8):,
 {
-    fn new(initial_data: impl FnMut() -> T) -> Self {
-        Self::new_with_state(Default::default(), initial_data)
+    fn new(mut initial_data: impl FnMut() -> T) -> Self {
+        Self {
+            state: Default::default(),
+            data: core::array::from_fn(|_| initial_data()),
+            lru: 0, // Arbitrary, but 0 is fine.
+        }
     }
 }
 
-impl<T: Default, const N: usize> Default for LRUCache<T, N, MatrixLRUState<N>>
+impl<T: Default, const N: usize> Default for FixedSizeLRUCache<T, N>
 where
     const_bound!(0 < N <= 8):,
 {
@@ -73,12 +66,6 @@ where
 
 /// A data structure that tracks the least recently used element out of a fixed set of `N` elements
 /// encoded as integers from `0` to `N - 1`
-trait LRUState<const N: usize> {
-    /// Access the given element (`0 ≤ access < N`) and return the new least recently used element
-    fn update(&mut self, n: usize) -> usize;
-}
-
-/// Implementation of an LRU cache up to associativity 8 using a bit matrix
 struct MatrixLRUState<const N: usize>
 where
     const_bound!(0 < N <= 8):,
@@ -100,10 +87,11 @@ where
     }
 }
 
-impl<const N: usize> LRUState<N> for MatrixLRUState<N>
+impl<const N: usize> MatrixLRUState<N>
 where
     const_bound!(0 < N <= 8):,
 {
+    /// Access the given element (`0 ≤ access < N`) and return the new least recently used element
     fn update(&mut self, n: usize) -> usize {
         assert!(n < N);
 
@@ -213,25 +201,25 @@ mod tests {
     #[test]
     fn test_lru_cache() {
         // Cache is initialized with zeros
-        let mut c: LRUCache<u8, 6, _> = Default::default();
+        let mut c = FixedSizeLRUCache::<u8, 6>::default();
         let cache = &mut c;
 
         /// Get the entry in the cache with the given lower four bits
-        fn cache_get(cache: &mut impl Cache<u8>, target: u8) -> Option<u8> {
+        fn cache_get(cache: &mut impl LRUCache<u8>, target: u8) -> Option<u8> {
             cache.get(|x| x & 0xf == target).cloned()
         }
-        
+
         assert_eq!(cache_get(cache, 0x0), Some(0));
         assert_eq!(cache_get(cache, 0xe), None);
         assert_eq!(cache_get(cache, 0x5), None);
 
-        *cache.get_replaceable() = 0xb5;
+        *cache.get_lru() = 0xb5;
 
         assert_eq!(cache_get(cache, 0x0), Some(0));
         assert_eq!(cache_get(cache, 0xe), None);
         assert_eq!(cache_get(cache, 0x5), Some(0xb5));
 
-        *cache.get_replaceable() = 0xce;
+        *cache.get_lru() = 0xce;
 
         assert_eq!(cache_get(cache, 0x0), Some(0));
         assert_eq!(cache_get(cache, 0xe), Some(0xce));
@@ -240,13 +228,14 @@ mod tests {
         //                       v--LRU          MRU--v
         // Now cache should have 0, 0, 0, 0, 0xce, 0xb5
 
-        for _ in 0..4 { // Access the four LRU elements (0)
-            assert_eq!(*cache.get_replaceable(), 0);
+        for _ in 0..4 {
+            // Access the four LRU elements (0)
+            assert_eq!(*cache.get_lru(), 0);
         }
 
         // Now cache should have 0xce, 0xb5, 0, 0, 0, 0
 
-        let evicted = cache.get_replaceable();
+        let evicted = cache.get_lru();
         assert_eq!(*evicted, 0xce); // This should return the spot where 0xce is stored
         *evicted = 0x2f; // Replace 0xce with 0x2f
 
@@ -260,9 +249,9 @@ mod tests {
         // Cache should have 0, 0, 0, 0, 0xb5, 0x2f
 
         for _ in 0..4 {
-            assert_eq!(*cache.get_replaceable(), 0);
+            assert_eq!(*cache.get_lru(), 0);
         }
-        assert_eq!(*cache.get_replaceable(), 0xb5);
-        assert_eq!(*cache.get_replaceable(), 0x2f);
+        assert_eq!(*cache.get_lru(), 0xb5);
+        assert_eq!(*cache.get_lru(), 0x2f);
     }
 }
