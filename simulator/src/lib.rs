@@ -4,12 +4,8 @@
 // #![feature(generic_const_exprs)]
 #![feature(unsafe_cell_access)]
 // Enable std if we are testing
-#[cfg(test)]
+#[cfg(feature = "std")]
 extern crate std;
-
-// Disallow testing WASM
-#[cfg(all(test, target_arch = "wasm32"))]
-compile_error!("Cannot test on WASM");
 
 pub mod components;
 pub mod params;
@@ -19,9 +15,10 @@ mod transmute_assertions;
 mod unsafe_ref;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
+pub mod zero_init;
 
 // Without wasm panic handler we also have to define our own
-#[cfg(not(test))]
+#[cfg(all(not(feature = "std"), not(test)))]
 const _: () = {
     use core::panic::PanicInfo;
 

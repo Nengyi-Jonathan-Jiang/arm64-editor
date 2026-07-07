@@ -3,9 +3,10 @@ use crate::components::lru_cache::{FixedSizeLRUCache, LRUCache};
 use crate::components::sizes::Addr;
 use crate::params::StaticBranchPredictionMode;
 use crate::unsafe_ref::UnsafeMutRef;
+use crate::zero_init::ZeroInit;
 use core::ptr::slice_from_raw_parts_mut;
 use hybrid_array::ArraySize;
-use typenum::{U4, Unsigned, U0, U1, U2};
+use typenum::{U0, U1, U2, U4, Unsigned};
 
 #[repr(transparent)]
 pub struct Predictor0 {
@@ -15,6 +16,7 @@ pub struct Predictor0 {
 unsafe impl UseBranchPredictorBase for Predictor0 {
     type BTBAssociativity = U4; // 4 is good enough
     type BHTEntrySizeBits = U0;
+    const INITIAL_BYTE: u8 = 0; // Irrelevant, 0 is fine
 
     fn dynamic_predict(_: u8, static_prediction: bool) -> bool {
         static_prediction
@@ -41,13 +43,14 @@ pub struct Predictor1 {
 unsafe impl UseBranchPredictorBase for Predictor1 {
     type BTBAssociativity = U4; // 4 is good enough
     type BHTEntrySizeBits = U1;
+    const INITIAL_BYTE: u8 = 1; // 1 = predict taken
 
-    fn dynamic_predict(_: u8, static_prediction: bool) -> bool {
-        static_prediction
+    fn dynamic_predict(state: u8, _: bool) -> bool {
+        state != 0
     }
 
-    fn dynamic_update(_: u8, _: bool) -> u8 {
-        0
+    fn dynamic_update(_: u8, did_jump: bool) -> u8 {
+        did_jump as u8
     }
 
     fn base(&self) -> &BranchPredictorBase<Self::BTBAssociativity> {
@@ -67,13 +70,23 @@ pub struct Predictor2 {
 unsafe impl UseBranchPredictorBase for Predictor2 {
     type BTBAssociativity = U4; // 4 is good enough
     type BHTEntrySizeBits = U2;
+    const INITIAL_BYTE: u8 = 2; // 2 = slightly predict taken
 
-    fn dynamic_predict(_: u8, static_prediction: bool) -> bool {
-        static_prediction
+    fn dynamic_predict(state: u8, _: bool) -> bool {
+        (state & 2) != 0
     }
 
-    fn dynamic_update(_: u8, _: bool) -> u8 {
-        0
+    fn dynamic_update(mut state: u8, did_jump: bool) -> u8 {
+        // new_state = state + {1 if did_jump else -1} = state + 2 * did_jump - 1
+        state = state + 2 * (did_jump as u8); // so this is new_state + 1
+
+        if state == 0 {
+            0 // new_state + 1 == 0 so new_state == -1, clamp to 0
+        } else if state == 5 {
+            3 // new_state + 1 == 5 so new_state == 4, clamp to 3
+        } else {
+            state - 1 // return new_state
+        }
     }
 
     fn base(&self) -> &BranchPredictorBase<Self::BTBAssociativity> {
@@ -85,15 +98,10 @@ unsafe impl UseBranchPredictorBase for Predictor2 {
     }
 }
 
+#[derive(Default)]
 struct BTBCacheEntry {
     tag: Addr,
     target: Addr,
-}
-
-macro_rules! const_is_nonneg {
-    ($x: ty) => {
-        [(); <$x>::USIZE]
-    };
 }
 
 struct BranchPredictorBase<
@@ -134,6 +142,9 @@ where
     /// Size of a BHT entry, in bits. This must divide 8 (so that there is an integer number of
     /// entries per byte)
     type BHTEntrySizeBits: ArraySize;
+
+    /// Initial byte value used to initialize memory
+    const INITIAL_BYTE: u8;
 
     /// Given the bht state, predict whether the branch will be taken
     fn dynamic_predict(state: u8, static_prediction: bool) -> bool;
@@ -252,14 +263,14 @@ impl<T: UseBranchPredictorBase> ConstructBranchPredictor for T {
         bht_size_log: u8,
         static_mode: StaticBranchPredictionMode,
     ) -> UnsafeMutRef<dyn BranchPredictor> {
-        fn get_mem_for<T>(len: usize, get_mem: &impl Fn(usize, usize) -> *mut ()) -> *mut T {
+        fn get_mem_for<T: ZeroInit>(len: usize, get_mem: &impl Fn(usize, usize) -> *mut ()) -> *mut T {
             get_mem(size_of::<T>() * len, align_of::<T>()) as *mut T
         }
 
         let btb_len: usize = 1 << btb_size_log;
         let bht_len = (T::BHTEntrySizeBits::USIZE << bht_size_log).div_ceil(8);
 
-        let res_mem = get_mem_for::<T>(1, &get_mem);
+        let res_mem = get_mem(size_of::<T>(), align_of::<T>()) as *mut T;
         let btb_mem =
             get_mem_for::<FixedSizeLRUCache<BTBCacheEntry, T::BTBAssociativity>>(btb_len, &get_mem);
         let bht_mem = get_mem_for::<u8>(bht_len, &get_mem);

@@ -65,9 +65,10 @@ pub enum PipelineMode {
 }
 
 #[repr(u8)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub enum StaticBranchPredictionMode {
     /// Conditional branches are predicted to always be taken
+    #[default]
     Always = 0,
     /// Conditional branches are predicted to never be taken
     Never = 1,

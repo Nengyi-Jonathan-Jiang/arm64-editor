@@ -117,6 +117,7 @@ mod dynamic {
 
     use crate::unsafe_ref::UnsafeMutRef;
     use crate::wasm::wasm_mutex::Mutex;
+    use crate::zero_init::ZeroInit;
 
     type _Ptr = *mut ();
 
@@ -155,12 +156,12 @@ mod dynamic {
         res
     }
 
-    pub unsafe fn append<T>() -> UnsafeMutRef<T> {
+    pub unsafe fn append<T: ZeroInit>() -> UnsafeMutRef<T> {
         let ptr = append_raw(size_of::<T>(), align_of::<T>()) as *mut T;
         unsafe { UnsafeMutRef::new(ptr.as_mut_unchecked()) }
     }
 
-    pub fn append_slice<T>(len: usize) -> UnsafeMutRef<[T]> {
+    pub fn append_slice<T: ZeroInit>(len: usize) -> UnsafeMutRef<[T]> {
         let ptr = append_raw(len * size_of::<T>(), align_of::<T>()) as *mut T;
         let slice_ptr = slice_from_raw_parts_mut(ptr, len);
         unsafe { UnsafeMutRef::new(slice_ptr.as_mut_unchecked()) }

@@ -1,6 +1,7 @@
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use hybrid_array::{Array, ArraySize};
+use crate::zero_init::ZeroInit;
 
 pub trait LRUCache<T> {
     /// Search for an entry satisfying the given predicate. If multiple entries satisfy the
@@ -38,6 +39,8 @@ pub struct FixedSizeLRUCache<T, N: ArraySize> {
     state: UnsafeCell<MatrixLRUState<N>>,
     data: Array<T, N>,
 }
+
+unsafe impl<T: Default, N: ArraySize> ZeroInit for FixedSizeLRUCache<T, N> {}
 
 impl<T, N: ArraySize> FixedSizeLRUCache<T, N> {
     fn update(&self, i: usize) {

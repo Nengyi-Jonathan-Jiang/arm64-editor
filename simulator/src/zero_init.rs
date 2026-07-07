@@ -167,8 +167,8 @@ macro_rules! zeroInit {
             }
         };
     }
-
 }
+
 /// Derive [`ZeroInit`] for a struct whose fields all implement ZeroInit. The struct must also
 /// implement or derive [`Default`]
 pub use zeroInit;

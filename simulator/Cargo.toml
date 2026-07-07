@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 typenum = { version = "1.20.1", default-features = false }
 hybrid-array = { version = "0.4.13", default-features = false }
+macro_rules_attribute = "0.2.2"
 [dev-dependencies]
 
 [profile.dev]
@@ -34,3 +35,7 @@ inherits = "dev"
 debug-assertions = false
 overflow-checks = false
 codegen-units = 1   # Shouldn't be too slow; we're not dealing with huge amounts of code
+
+[features]
+default = ["std"]
+std = []
