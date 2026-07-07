@@ -11,11 +11,15 @@ impl DummyMemoryAccess {
 }
 
 impl MemoryAccess for DummyMemoryAccess {
-    fn read(&mut self, _: Addr) -> Result<Byte, ()> {
+    fn get(&mut self, addr: Addr) -> Result<&mut u8, ()> {
+        Err(())
+    }
+
+    fn read_b(&mut self, _: Addr) -> Result<Byte, ()> {
         Ok(0)
     }
 
-    fn write(&mut self, _: Addr, _: Byte) -> Result<(), ()> {
+    fn write_b(&mut self, _: Addr, _: Byte) -> Result<(), ()> {
         Ok(())
     }
 }

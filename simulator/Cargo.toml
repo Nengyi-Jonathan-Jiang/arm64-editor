@@ -8,6 +8,8 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+typenum = { version = "1.20.1", default-features = false }
+hybrid-array = { version = "0.4.13", default-features = false }
 [dev-dependencies]
 
 [profile.dev]

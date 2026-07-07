@@ -1,102 +1,109 @@
-use core::ptr::slice_from_raw_parts_mut;
-
-use crate::components::sizes::Addr;
 use crate::components::BranchPredictor;
+use crate::components::lru_cache::{FixedSizeLRUCache, LRUCache};
+use crate::components::sizes::Addr;
 use crate::params::StaticBranchPredictionMode;
-use crate::transmute_assertions::TransmuteAssertions;
 use crate::unsafe_ref::UnsafeMutRef;
+use core::ptr::slice_from_raw_parts_mut;
+use hybrid_array::ArraySize;
+use typenum::{U4, Unsigned, U0, U1, U2};
 
 #[repr(transparent)]
 pub struct Predictor0 {
-    base: BranchPredictorBase<()>,
+    base: BranchPredictorBase<<Self as UseBranchPredictorBase>::BTBAssociativity>,
 }
 
 unsafe impl UseBranchPredictorBase for Predictor0 {
-    type EntryData = ();
+    type BTBAssociativity = U4; // 4 is good enough
+    type BHTEntrySizeBits = U0;
 
-    fn simple_update(_: &mut Self::EntryData, _: bool) {}
-
-    fn simple_predict(_: &Self::EntryData, _: Addr, _: Addr, static_prediction: bool) -> bool {
+    fn dynamic_predict(_: u8, static_prediction: bool) -> bool {
         static_prediction
     }
 
-    fn base(&self) -> &BranchPredictorBase<Self::EntryData> {
+    fn dynamic_update(_: u8, _: bool) -> u8 {
+        0
+    }
+
+    fn base(&self) -> &BranchPredictorBase<Self::BTBAssociativity> {
         &self.base
     }
 
-    fn base_mut(&mut self) -> &mut BranchPredictorBase<Self::EntryData> {
+    fn base_mut(&mut self) -> &mut BranchPredictorBase<Self::BTBAssociativity> {
         &mut self.base
     }
 }
 
 #[repr(transparent)]
 pub struct Predictor1 {
-    base: BranchPredictorBase<bool>,
+    base: BranchPredictorBase<<Self as UseBranchPredictorBase>::BTBAssociativity>,
 }
 
 unsafe impl UseBranchPredictorBase for Predictor1 {
-    type EntryData = bool;
+    type BTBAssociativity = U4; // 4 is good enough
+    type BHTEntrySizeBits = U1;
 
-    fn simple_update(_entry: &mut Self::EntryData, _did_jump: bool) {
-        todo!()
+    fn dynamic_predict(_: u8, static_prediction: bool) -> bool {
+        static_prediction
     }
 
-    fn simple_predict(
-        _entry: &Self::EntryData,
-        _addr: Addr,
-        _target_addr: Addr,
-        _static_prediction: bool,
-    ) -> bool {
-        todo!()
+    fn dynamic_update(_: u8, _: bool) -> u8 {
+        0
     }
 
-    fn base(&self) -> &BranchPredictorBase<Self::EntryData> {
+    fn base(&self) -> &BranchPredictorBase<Self::BTBAssociativity> {
         &self.base
     }
 
-    fn base_mut(&mut self) -> &mut BranchPredictorBase<Self::EntryData> {
+    fn base_mut(&mut self) -> &mut BranchPredictorBase<Self::BTBAssociativity> {
         &mut self.base
     }
 }
 
 #[repr(transparent)]
 pub struct Predictor2 {
-    base: BranchPredictorBase<u8>,
+    base: BranchPredictorBase<<Self as UseBranchPredictorBase>::BTBAssociativity>,
 }
 
 unsafe impl UseBranchPredictorBase for Predictor2 {
-    type EntryData = u8;
+    type BTBAssociativity = U4; // 4 is good enough
+    type BHTEntrySizeBits = U2;
 
-    fn simple_update(_entry: &mut Self::EntryData, _did_jump: bool) {
-        todo!()
+    fn dynamic_predict(_: u8, static_prediction: bool) -> bool {
+        static_prediction
     }
 
-    fn simple_predict(
-        _entry: &Self::EntryData,
-        _addr: Addr,
-        _target_addr: Addr,
-        _static_prediction: bool,
-    ) -> bool {
-        todo!()
+    fn dynamic_update(_: u8, _: bool) -> u8 {
+        0
     }
 
-    fn base(&self) -> &BranchPredictorBase<Self::EntryData> {
+    fn base(&self) -> &BranchPredictorBase<Self::BTBAssociativity> {
         &self.base
     }
 
-    fn base_mut(&mut self) -> &mut BranchPredictorBase<Self::EntryData> {
+    fn base_mut(&mut self) -> &mut BranchPredictorBase<Self::BTBAssociativity> {
         &mut self.base
     }
 }
 
-struct BhtEntry<EntryData> {
-    last_indirect_target: Addr,
-    data: EntryData,
+struct BTBCacheEntry {
+    tag: Addr,
+    target: Addr,
 }
 
-struct BranchPredictorBase<EntryData> {
+macro_rules! const_is_nonneg {
+    ($x: ty) => {
+        [(); <$x>::USIZE]
+    };
+}
+
+struct BranchPredictorBase<
+    // needs to use typenum instead of generic const because this needs to work with
+    // UseBranchPredictorBase's associated type BTBAssociativity
+    BTBAssociativity: ArraySize,
+> {
     static_mode: StaticBranchPredictionMode,
-    bht: UnsafeMutRef<[BhtEntry<EntryData>]>,
+    branch_target_buffer: UnsafeMutRef<[FixedSizeLRUCache<BTBCacheEntry, BTBAssociativity>]>,
+    branch_history_table: UnsafeMutRef<[u8]>,
 }
 
 /// Provides a new() function that can be used to construct a BranchPredictor
@@ -109,6 +116,7 @@ pub trait ConstructBranchPredictor {
     ///   satisfies the lifetime semantics of [`UnsafeMutRef`]
     fn new<F: Fn(usize, usize) -> *mut ()>(
         get_mem: F,
+        btb_size_log: u8,
         bht_size_log: u8,
         static_mode: StaticBranchPredictionMode,
     ) -> UnsafeMutRef<dyn BranchPredictor>;
@@ -121,93 +129,152 @@ unsafe trait UseBranchPredictorBase
 where
     Self: Sized + BranchPredictor + 'static,
 {
-    type EntryData;
+    /// Associativity of cache used in the branch target buffer
+    type BTBAssociativity: ArraySize;
+    /// Size of a BHT entry, in bits. This must divide 8 (so that there is an integer number of
+    /// entries per byte)
+    type BHTEntrySizeBits: ArraySize;
 
-    fn simple_update(entry: &mut Self::EntryData, did_jump: bool);
+    /// Given the bht state, predict whether the branch will be taken
+    fn dynamic_predict(state: u8, static_prediction: bool) -> bool;
+    /// Update the bht state with the given information (whether the branch was taken)
+    fn dynamic_update(state: u8, did_jump: bool) -> u8;
 
-    fn simple_predict(
-        entry: &Self::EntryData,
-        addr: Addr,
-        target_addr: Addr,
-        static_prediction: bool,
-    ) -> bool;
+    /// Get self as BranchPredictorBase
+    fn base(&self) -> &BranchPredictorBase<Self::BTBAssociativity>;
 
-    fn base(&self) -> &BranchPredictorBase<Self::EntryData>;
-
-    fn base_mut(&mut self) -> &mut BranchPredictorBase<Self::EntryData>;
+    /// Get self as mut BranchPredictorBase
+    fn base_mut(&mut self) -> &mut BranchPredictorBase<Self::BTBAssociativity>;
 }
 
 impl<T: UseBranchPredictorBase> BranchPredictor for T {
-    fn predict(&self, addr: Addr, target_addr: Addr) -> bool {
-        let index = get_index(self, addr);
+    fn predict(&self, addr: Addr) -> Option<Addr> {
+        let btb = &self.base().branch_target_buffer;
+        let BTBIndexer { index, tag } = index_btb(btb.len(), addr);
+        let predicted_target_addr = btb[index].get(|x| x.tag == tag)?.target;
 
         let static_prediction = match self.base().static_mode {
             StaticBranchPredictionMode::Always => true,
             StaticBranchPredictionMode::Never => false,
             // Predict taken if backward
-            StaticBranchPredictionMode::Directional => addr > target_addr,
+            StaticBranchPredictionMode::Directional => addr > predicted_target_addr,
         };
 
-        T::simple_predict(
-            &self.base().bht[index].data,
-            addr,
-            target_addr,
-            static_prediction,
-        )
+        if T::BHTEntrySizeBits::USIZE == 0 {
+            return if static_prediction { Some(addr) } else { None };
+        }
+
+        let bht = &self.base().branch_history_table;
+        let BHTIndexer {
+            byte_index,
+            mask,
+            shift,
+        } = index_bht::<T::BHTEntrySizeBits>(bht.len(), addr);
+        let bht_entry = (bht[byte_index] >> shift) & mask;
+
+        if T::dynamic_predict(bht_entry, static_prediction) {
+            Some(predicted_target_addr)
+        } else {
+            None
+        }
     }
 
-    fn predict_indirect(&self, addr: Addr) -> (bool, Addr) {
-        let index = get_index(self, addr);
-        let target_addr = self.base().bht[index].last_indirect_target;
+    fn update_target(&mut self, addr: Addr, target_addr: Addr) {
+        let btb = &mut self.base_mut().branch_target_buffer;
+        let BTBIndexer { index, tag } = index_btb(btb.len(), addr);
 
-        (self.predict(addr, target_addr), target_addr)
+        btb[index].get_or_insert(
+            |x| x.tag == tag,
+            |entry| {
+                entry.tag = tag;
+                entry.target = target_addr;
+            },
+        );
     }
 
-    fn update(&mut self, addr: Addr, did_jump: bool) {
-        let index = get_index(self, addr);
+    fn update_branch(&mut self, addr: Addr, did_jump: bool) {
+        if T::BHTEntrySizeBits::USIZE == 0 {
+            return;
+        }
 
-        T::simple_update(&mut self.base_mut().bht[index].data, did_jump);
-    }
+        let bht = &mut self.base_mut().branch_history_table;
+        let BHTIndexer {
+            byte_index,
+            mask,
+            shift,
+        } = index_bht::<T::BHTEntrySizeBits>(bht.len(), addr);
 
-    fn update_indirect(&mut self, addr: Addr, did_jump: bool, actual_target_addr: Addr) {
-        self.update(addr, did_jump);
-
-        let index = get_index(self, addr);
-        self.base_mut().bht[index].last_indirect_target = actual_target_addr;
+        let bht_entry = (bht[byte_index] >> shift) & mask;
+        let new_entry = Self::dynamic_update(bht_entry, did_jump);
+        bht[byte_index] &= !(mask << shift);
+        bht[byte_index] |= new_entry << shift;
     }
 }
 
-fn get_index(x: &impl UseBranchPredictorBase, addr: Addr) -> usize {
-    (addr & (x.base().bht.len() - 1) as Addr) as usize
+struct BTBIndexer {
+    index: usize,
+    tag: Addr,
+}
+struct BHTIndexer {
+    byte_index: usize,
+    shift: usize,
+    mask: u8,
+}
+
+fn index_btb(table_len: usize, addr: Addr) -> BTBIndexer {
+    let index = (addr & (table_len - 1) as Addr) as usize;
+    let tag = addr ^ (index as Addr);
+
+    BTBIndexer { index, tag }
+}
+
+fn index_bht<EntrySizeBits: Unsigned>(bht_len: usize, addr: Addr) -> BHTIndexer {
+    let index = (addr & (bht_len - 1) as Addr) as usize;
+
+    let entries_per_byte = 8 / EntrySizeBits::USIZE;
+
+    let byte_index = index / entries_per_byte;
+    let mask = (1u8 << EntrySizeBits::USIZE) - 1;
+    let shift = EntrySizeBits::USIZE * (index % entries_per_byte);
+
+    BHTIndexer {
+        byte_index,
+        mask,
+        shift,
+    }
 }
 
 impl<T: UseBranchPredictorBase> ConstructBranchPredictor for T {
+    //noinspection RsUnresolvedPath (RustRover has issues with associated consts in generics)
     fn new<F: Fn(usize, usize) -> *mut ()>(
         get_mem: F,
+        btb_size_log: u8,
         bht_size_log: u8,
         static_mode: StaticBranchPredictionMode,
     ) -> UnsafeMutRef<dyn BranchPredictor> {
-        // These are necessary but not sufficient to assert that Self's only non-zero-sized field is
-        // BranchPredictorBase<EntryData>. However, combined with get_base(), we can be reasonably
-        // sure
-        let _ = TransmuteAssertions::<T, BranchPredictorBase<T::EntryData>>::SIZE;
-        let _ = TransmuteAssertions::<T, BranchPredictorBase<T::EntryData>>::ALIGN;
+        fn get_mem_for<T>(len: usize, get_mem: &impl Fn(usize, usize) -> *mut ()) -> *mut T {
+            get_mem(size_of::<T>() * len, align_of::<T>()) as *mut T
+        }
 
-        let len: usize = 1 << bht_size_log;
+        let btb_len: usize = 1 << btb_size_log;
+        let bht_len = (T::BHTEntrySizeBits::USIZE << bht_size_log).div_ceil(8);
 
-        let struct_size = size_of::<T>();
-        let res_align = align_of::<T>();
-        let table_size = size_of::<BhtEntry<T::EntryData>>() * len;
-        let table_align = align_of::<BhtEntry<T::EntryData>>();
+        let res_mem = get_mem_for::<T>(1, &get_mem);
+        let btb_mem =
+            get_mem_for::<FixedSizeLRUCache<BTBCacheEntry, T::BTBAssociativity>>(btb_len, &get_mem);
+        let bht_mem = get_mem_for::<u8>(bht_len, &get_mem);
 
-        let res_mem = get_mem(struct_size, res_align) as *mut T;
-        let table_mem = get_mem(table_size, table_align) as *mut BhtEntry<T::EntryData>;
+        let btb_slice = slice_from_raw_parts_mut(btb_mem, btb_len);
+        let bht_slice = slice_from_raw_parts_mut(bht_mem, bht_len);
 
         let mut res = unsafe { UnsafeMutRef::new_from_ptr(res_mem) };
 
         let base = res.base_mut();
         base.static_mode = static_mode;
-        base.bht = unsafe { UnsafeMutRef::new_from_ptr(slice_from_raw_parts_mut(table_mem, len)) };
+        unsafe {
+            base.branch_target_buffer = UnsafeMutRef::new_from_ptr(btb_slice);
+            base.branch_history_table = UnsafeMutRef::new_from_ptr(bht_slice);
+        }
 
         unsafe { res.transmute_into::<T>().map_into(|x| x as _) }
     }

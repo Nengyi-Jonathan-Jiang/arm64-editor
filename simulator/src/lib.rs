@@ -1,7 +1,8 @@
 #![no_std]
 #![allow(incomplete_features)]
-#![feature(generic_const_exprs)]
-
+// #![feature(min_generic_const_args)]
+// #![feature(generic_const_exprs)]
+#![feature(unsafe_cell_access)]
 // Enable std if we are testing
 #[cfg(test)]
 extern crate std;
@@ -18,9 +19,8 @@ mod transmute_assertions;
 mod unsafe_ref;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
-mod const_bound;
-// Without wasm panic handler we also have to define our own
 
+// Without wasm panic handler we also have to define our own
 #[cfg(not(test))]
 const _: () = {
     use core::panic::PanicInfo;

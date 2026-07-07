@@ -50,7 +50,9 @@ pub enum CachePolicy {
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub enum CacheWriteMode {
+    // Data is written to main memory when the cache line is evicted
     WriteBack = 0,
+    // Data is written to main memory immediately upon write
     WriteThrough = 1,
 }
 
@@ -65,8 +67,11 @@ pub enum PipelineMode {
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub enum StaticBranchPredictionMode {
+    /// Conditional branches are predicted to always be taken
     Always = 0,
+    /// Conditional branches are predicted to never be taken
     Never = 1,
+    /// Conditional branches are predicted to be taken if backwards (predicted target < addr)
     Directional = 2,
 }
 
