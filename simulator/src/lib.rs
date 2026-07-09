@@ -1,8 +1,7 @@
 #![no_std]
 #![allow(incomplete_features)]
-// #![feature(min_generic_const_args)]
-// #![feature(generic_const_exprs)]
 #![feature(unsafe_cell_access)]
+#![feature(decl_macro)]
 // Enable std if we are testing
 #[cfg(feature = "std")]
 extern crate std;
@@ -15,7 +14,8 @@ mod transmute_assertions;
 mod unsafe_ref;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
-pub mod zero_init;
+mod zero_init;
+mod simple_alloc;
 
 // Without wasm panic handler we also have to define our own
 #[cfg(all(not(feature = "std"), not(test)))]

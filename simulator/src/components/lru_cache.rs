@@ -1,7 +1,10 @@
+use crate::zero_init::zeroInit_lenient;
+use crate::zero_init::zeroInit;
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use hybrid_array::{Array, ArraySize};
 use crate::zero_init::ZeroInit;
+use macro_rules_attribute::derive;
 
 pub trait LRUCache<T> {
     /// Search for an entry satisfying the given predicate. If multiple entries satisfy the
@@ -34,6 +37,7 @@ pub trait LRUCache<T> {
     }
 }
 
+#[derive(zeroInit_lenient!)]
 pub struct FixedSizeLRUCache<T, N: ArraySize> {
     // Use raw UnsafeCell; we want to be as efficient as possible
     state: UnsafeCell<MatrixLRUState<N>>,
@@ -98,6 +102,7 @@ impl<T: Default, N: ArraySize> Default for FixedSizeLRUCache<T, N> {
 
 /// A data structure that tracks the least recently used element out of a fixed set of `N` elements
 /// encoded as integers from `0` to `N - 1`
+#[derive(zeroInit!)]
 struct MatrixLRUState<N: ArraySize> {
     /// Invariant: when interpreted as an 8 x 8 matrix of bits in row major order and considering
     /// only the top left N x N submatrix, the bit at row r, col c is set iff element c was accessed
@@ -249,12 +254,7 @@ mod tests {
         // Cache is initialized with zeros
         let mut c = FixedSizeLRUCache::<u8, U6>::default();
         let cache = &mut c;
-
-        /// Get the entry in the cache with the given lower four bits
-        fn cache_get(cache: &mut impl LRUCache<u8>, target: u8) -> Option<u8> {
-            cache.get(|x| x & 0xf == target).cloned()
-        }
-
+        
         check_cache_get!((0x0 in cache) == 0);
         check_cache_get!((0xe in cache) == None);
         check_cache_get!((0x5 in cache) == None);
