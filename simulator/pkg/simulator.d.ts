@@ -54,8 +54,9 @@ export const module : {
     updateParams(): void;
 }
 
-export namespace types {    type Uses<_ extends any[]> = never;
-    
+export namespace types {    
+    /* Dummy helper type for syntactically indicating the types referenced by a type */
+    type $<_ extends any[]> = never;
     
     /**
      * - Name: `SimulatorParams`
@@ -68,7 +69,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `pipeline_params`   | `5` | {@link PipelineParams `PipelineParams`}               |
      * | `branch_prediction` | `8` | {@link BranchPredictorParams `BranchPredictorParams`} |
      */
-    type SimulatorParams = Uses<[CacheParams, PipelineParams, BranchPredictorParams]>;
+    type SimulatorParams = $<[CacheParams, PipelineParams, BranchPredictorParams]>;
     
     /**
      * - Name: `Mutex<Option<Simulator>>`
@@ -80,7 +81,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `data`   | `0`    | {@link UnsafeCell_Option_Simulator `UnsafeCell<Option<Simulator>>`} |
      * | `locked` | `1048` | {@link UnsafeCell_bool `UnsafeCell<bool>`}                          |
      */
-    type Mutex_Option_Simulator = Uses<[UnsafeCell_bool, UnsafeCell_Option_Simulator]>;
+    type Mutex_Option_Simulator = $<[UnsafeCell_Option_Simulator, UnsafeCell_bool]>;
     
     /**
      * - Name: `Simulator`
@@ -94,7 +95,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `branch_predictor` | `16` | {@link WASMAllocation_dyn_BranchPredictor `WASMAllocation<dyn BranchPredictor>`} |
      * | `registers`        | `24` | `[u64 ; 128]`                                                                    |
      */
-    type Simulator = Uses<[WASMAllocation_dyn_BranchPredictor, WASMAllocation_dyn_Pipeline, WASMAllocation_dyn_MemoryAccess]>;
+    type Simulator = $<[WASMAllocation_dyn_MemoryAccess, WASMAllocation_dyn_BranchPredictor, WASMAllocation_dyn_Pipeline]>;
     
     /**
      * - Name: `CacheParams`
@@ -109,7 +110,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `policy`         | `3` | {@link CachePolicy `CachePolicy`}       |
      * | `write_mode`     | `4` | {@link CacheWriteMode `CacheWriteMode`} |
      */
-    type CacheParams = Uses<[CacheWriteMode, CachePolicy]>;
+    type CacheParams = $<[CacheWriteMode, CachePolicy]>;
     
     /**
      * - Name: `PipelineParams`
@@ -121,7 +122,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `pipeline_mode` | `0` | {@link PipelineMode `PipelineMode`}       |
      * | `cycle_times`   | `1` | {@link CycleTimeParams `CycleTimeParams`} |
      */
-    type PipelineParams = Uses<[CycleTimeParams, PipelineMode]>;
+    type PipelineParams = $<[CycleTimeParams, PipelineMode]>;
     
     /**
      * - Name: `BranchPredictorParams`
@@ -134,7 +135,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `dynamic_predictor` | `1` | {@link DynamicBranchPredictor `DynamicBranchPredictor`}         |
      * | `static_mode`       | `2` | {@link StaticBranchPredictionMode `StaticBranchPredictionMode`} |
      */
-    type BranchPredictorParams = Uses<[DynamicBranchPredictor, StaticBranchPredictionMode]>;
+    type BranchPredictorParams = $<[StaticBranchPredictionMode, DynamicBranchPredictor]>;
     
     /**
      * - Name: `UnsafeCell<Option<Simulator>>`
@@ -145,7 +146,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | ------- | --- | -------------------------------------------- |
      * | `value` | `0` | {@link Option_Simulator `Option<Simulator>`} |
      */
-    type UnsafeCell_Option_Simulator = Uses<[Option_Simulator]>;
+    type UnsafeCell_Option_Simulator = $<[Option_Simulator]>;
     
     /**
      * - Name: `UnsafeCell<bool>`
@@ -156,7 +157,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | ------- | --- | ------ |
      * | `value` | `0` | `bool` |
      */
-    type UnsafeCell_bool = Uses<[]>;
+    type UnsafeCell_bool = $<[]>;
     
     /**
      * - Name: `WASMAllocation<dyn Pipeline>`
@@ -167,7 +168,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | ----- | --- | ------------------------------------------------ |
      * | `ptr` | `0` | {@link ptr_mut_dyn_Pipeline `*mut dyn Pipeline`} |
      */
-    type WASMAllocation_dyn_Pipeline = Uses<[ptr_mut_dyn_Pipeline]>;
+    type WASMAllocation_dyn_Pipeline = $<[ptr_mut_dyn_Pipeline]>;
     
     /**
      * - Name: `WASMAllocation<dyn MemoryAccess>`
@@ -178,7 +179,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | ----- | --- | -------------------------------------------------------- |
      * | `ptr` | `0` | {@link ptr_mut_dyn_MemoryAccess `*mut dyn MemoryAccess`} |
      */
-    type WASMAllocation_dyn_MemoryAccess = Uses<[ptr_mut_dyn_MemoryAccess]>;
+    type WASMAllocation_dyn_MemoryAccess = $<[ptr_mut_dyn_MemoryAccess]>;
     
     /**
      * - Name: `WASMAllocation<dyn BranchPredictor>`
@@ -189,7 +190,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | ----- | --- | -------------------------------------------------------------- |
      * | `ptr` | `0` | {@link ptr_mut_dyn_BranchPredictor `*mut dyn BranchPredictor`} |
      */
-    type WASMAllocation_dyn_BranchPredictor = Uses<[ptr_mut_dyn_BranchPredictor]>;
+    type WASMAllocation_dyn_BranchPredictor = $<[ptr_mut_dyn_BranchPredictor]>;
     
     /**
      * - Name: `CachePolicy`
@@ -206,7 +207,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | Name | @ | Type |
      * | ---- | - | ---- |
      */
-    type CachePolicy = Uses<[]>;
+    type CachePolicy = $<[]>;
     
     /**
      * - Name: `CacheWriteMode`
@@ -223,7 +224,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | Name | @ | Type |
      * | ---- | - | ---- |
      */
-    type CacheWriteMode = Uses<[]>;
+    type CacheWriteMode = $<[]>;
     
     /**
      * - Name: `PipelineMode`
@@ -244,7 +245,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | Name | @ | Type |
      * | ---- | - | ---- |
      */
-    type PipelineMode = Uses<[]>;
+    type PipelineMode = $<[]>;
     
     /**
      * - Name: `CycleTimeParams`
@@ -256,7 +257,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `cache_access` | `0` | `u8` |
      * | `dram_penalty` | `1` | `u8` |
      */
-    type CycleTimeParams = Uses<[]>;
+    type CycleTimeParams = $<[]>;
     
     /**
      * - Name: `DynamicBranchPredictor`
@@ -277,7 +278,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | Name | @ | Type |
      * | ---- | - | ---- |
      */
-    type DynamicBranchPredictor = Uses<[]>;
+    type DynamicBranchPredictor = $<[]>;
     
     /**
      * - Name: `StaticBranchPredictionMode`
@@ -298,7 +299,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | Name | @ | Type |
      * | ---- | - | ---- |
      */
-    type StaticBranchPredictionMode = Uses<[]>;
+    type StaticBranchPredictionMode = $<[]>;
     
     /**
      * - Name: `Option<Simulator>`
@@ -316,7 +317,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | ----- | --- | ----------------------------- |
      * | `__0` | `0` | {@link Simulator `Simulator`} |
      */
-    type Option_Simulator = Uses<[Simulator]>;
+    type Option_Simulator = $<[Simulator]>;
     
     /**
      * - Name: `*mut dyn Pipeline`
@@ -328,7 +329,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `pointer` | `0` | {@link ptr_mut_dyn_Pipeline `*mut dyn Pipeline`} |
      * | `vtable`  | `4` | `&[usize ; 5]`                                   |
      */
-    type ptr_mut_dyn_Pipeline = Uses<[ptr_mut_dyn_Pipeline]>;
+    type ptr_mut_dyn_Pipeline = $<[ptr_mut_dyn_Pipeline]>;
     
     /**
      * - Name: `*mut dyn MemoryAccess`
@@ -340,7 +341,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `pointer` | `0` | {@link ptr_mut_dyn_MemoryAccess `*mut dyn MemoryAccess`} |
      * | `vtable`  | `4` | `&[usize ; 12]`                                          |
      */
-    type ptr_mut_dyn_MemoryAccess = Uses<[ptr_mut_dyn_MemoryAccess]>;
+    type ptr_mut_dyn_MemoryAccess = $<[ptr_mut_dyn_MemoryAccess]>;
     
     /**
      * - Name: `*mut dyn BranchPredictor`
@@ -354,7 +355,7 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * 
      * `BranchPredictor` implementations: {@link Predictor0 `Predictor0`}, {@link Predictor1 `Predictor1`}, {@link Predictor2 `Predictor2`}
      */
-    type ptr_mut_dyn_BranchPredictor = Uses<[Predictor1, Predictor2, ptr_mut_dyn_BranchPredictor, Predictor0]>;
+    type ptr_mut_dyn_BranchPredictor = $<[ptr_mut_dyn_BranchPredictor, Predictor1, Predictor2, Predictor0]>;
     
     /**
      * - Name: `Predictor0`
@@ -363,9 +364,9 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * Fields:
      * | Name   | @   | Type                                                   |
      * | ------ | --- | ------------------------------------------------------ |
-     * | `base` | `0` | {@link BranchPredictorBase_3 `BranchPredictorBase<3>`} |
+     * | `base` | `0` | {@link BranchPredictorBase_4 `BranchPredictorBase<4>`} |
      */
-    type Predictor0 = Uses<[BranchPredictorBase_3]>;
+    type Predictor0 = $<[BranchPredictorBase_4]>;
     
     /**
      * - Name: `Predictor1`
@@ -374,9 +375,9 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * Fields:
      * | Name   | @   | Type                                                   |
      * | ------ | --- | ------------------------------------------------------ |
-     * | `base` | `0` | {@link BranchPredictorBase_3 `BranchPredictorBase<3>`} |
+     * | `base` | `0` | {@link BranchPredictorBase_4 `BranchPredictorBase<4>`} |
      */
-    type Predictor1 = Uses<[BranchPredictorBase_3]>;
+    type Predictor1 = $<[BranchPredictorBase_4]>;
     
     /**
      * - Name: `Predictor2`
@@ -385,33 +386,33 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * Fields:
      * | Name   | @   | Type                                                   |
      * | ------ | --- | ------------------------------------------------------ |
-     * | `base` | `0` | {@link BranchPredictorBase_3 `BranchPredictorBase<3>`} |
+     * | `base` | `0` | {@link BranchPredictorBase_4 `BranchPredictorBase<4>`} |
      */
-    type Predictor2 = Uses<[BranchPredictorBase_3]>;
+    type Predictor2 = $<[BranchPredictorBase_4]>;
     
     /**
-     * - Name: `BranchPredictorBase<3>`
+     * - Name: `BranchPredictorBase<4>`
      * - Size: `20`
      * 
      * Fields:
      * | Name                   | @    | Type                                                                                                             |
      * | ---------------------- | ---- | ---------------------------------------------------------------------------------------------------------------- |
-     * | `branch_target_buffer` | `0`  | {@link WASMAllocation_FixedSizeLRUCache_BTBCacheEntry_3 `WASMAllocation<[FixedSizeLRUCache<BTBCacheEntry, 3>]>`} |
+     * | `branch_target_buffer` | `0`  | {@link WASMAllocation_FixedSizeLRUCache_BTBCacheEntry_4 `WASMAllocation<[FixedSizeLRUCache<BTBCacheEntry, 4>]>`} |
      * | `branch_history_table` | `8`  | {@link WASMAllocation_u8 `WASMAllocation<[u8]>`}                                                                 |
      * | `static_mode`          | `16` | {@link StaticBranchPredictionMode `StaticBranchPredictionMode`}                                                  |
      */
-    type BranchPredictorBase_3 = Uses<[WASMAllocation_u8, WASMAllocation_FixedSizeLRUCache_BTBCacheEntry_3, StaticBranchPredictionMode]>;
+    type BranchPredictorBase_4 = $<[WASMAllocation_u8, WASMAllocation_FixedSizeLRUCache_BTBCacheEntry_4, StaticBranchPredictionMode]>;
     
     /**
-     * - Name: `WASMAllocation<[FixedSizeLRUCache<BTBCacheEntry, 3>]>`
+     * - Name: `WASMAllocation<[FixedSizeLRUCache<BTBCacheEntry, 4>]>`
      * - Size: `8`
      * 
      * Fields:
      * | Name  | @   | Type                                                                                           |
      * | ----- | --- | ---------------------------------------------------------------------------------------------- |
-     * | `ptr` | `0` | {@link ptr_mut_FixedSizeLRUCache_BTBCacheEntry_3 `*mut [FixedSizeLRUCache<BTBCacheEntry, 3>]`} |
+     * | `ptr` | `0` | {@link ptr_mut_FixedSizeLRUCache_BTBCacheEntry_4 `*mut [FixedSizeLRUCache<BTBCacheEntry, 4>]`} |
      */
-    type WASMAllocation_FixedSizeLRUCache_BTBCacheEntry_3 = Uses<[ptr_mut_FixedSizeLRUCache_BTBCacheEntry_3]>;
+    type WASMAllocation_FixedSizeLRUCache_BTBCacheEntry_4 = $<[ptr_mut_FixedSizeLRUCache_BTBCacheEntry_4]>;
     
     /**
      * - Name: `WASMAllocation<[u8]>`
@@ -422,19 +423,19 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | ----- | --- | ------------------------------ |
      * | `ptr` | `0` | {@link ptr_mut_u8 `*mut [u8]`} |
      */
-    type WASMAllocation_u8 = Uses<[ptr_mut_u8]>;
+    type WASMAllocation_u8 = $<[ptr_mut_u8]>;
     
     /**
-     * - Name: `*mut [FixedSizeLRUCache<BTBCacheEntry, 3>]`
+     * - Name: `*mut [FixedSizeLRUCache<BTBCacheEntry, 4>]`
      * - Size: `8`
      * 
      * Fields:
      * | Name       | @   | Type                                                                                 |
      * | ---------- | --- | ------------------------------------------------------------------------------------ |
-     * | `data_ptr` | `0` | {@link FixedSizeLRUCache_BTBCacheEntry_3 `*mut FixedSizeLRUCache<BTBCacheEntry, 3>`} |
+     * | `data_ptr` | `0` | {@link FixedSizeLRUCache_BTBCacheEntry_4 `*mut FixedSizeLRUCache<BTBCacheEntry, 4>`} |
      * | `length`   | `4` | `usize`                                                                              |
      */
-    type ptr_mut_FixedSizeLRUCache_BTBCacheEntry_3 = Uses<[FixedSizeLRUCache_BTBCacheEntry_3]>;
+    type ptr_mut_FixedSizeLRUCache_BTBCacheEntry_4 = $<[FixedSizeLRUCache_BTBCacheEntry_4]>;
     
     /**
      * - Name: `*mut [u8]`
@@ -446,22 +447,22 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `data_ptr` | `0` | `*mut u8` |
      * | `length`   | `4` | `usize`   |
      */
-    type ptr_mut_u8 = Uses<[]>;
+    type ptr_mut_u8 = $<[]>;
     
     /**
-     * - Name: `FixedSizeLRUCache<BTBCacheEntry, 3>`
+     * - Name: `FixedSizeLRUCache<BTBCacheEntry, 4>`
      * - Size: `72`
      * 
      * Fields:
      * | Name    | @    | Type                                                                |
      * | ------- | ---- | ------------------------------------------------------------------- |
-     * | `data`  | `0`  | {@link Array_BTBCacheEntry_3 `Array<BTBCacheEntry, 3>`}             |
-     * | `state` | `64` | {@link UnsafeCell_MatrixLRUState_3 `UnsafeCell<MatrixLRUState<3>>`} |
+     * | `data`  | `0`  | {@link Array_BTBCacheEntry_4 `Array<BTBCacheEntry, 4>`}             |
+     * | `state` | `64` | {@link UnsafeCell_MatrixLRUState_4 `UnsafeCell<MatrixLRUState<4>>`} |
      */
-    type FixedSizeLRUCache_BTBCacheEntry_3 = Uses<[UnsafeCell_MatrixLRUState_3, Array_BTBCacheEntry_3]>;
+    type FixedSizeLRUCache_BTBCacheEntry_4 = $<[UnsafeCell_MatrixLRUState_4, Array_BTBCacheEntry_4]>;
     
     /**
-     * - Name: `Array<BTBCacheEntry, 3>`
+     * - Name: `Array<BTBCacheEntry, 4>`
      * - Size: `64`
      * 
      * Fields:
@@ -469,18 +470,18 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | ----- | --- | ------------------------------------------- |
      * | `__0` | `0` | {@link BTBCacheEntry `[BTBCacheEntry ; 4]`} |
      */
-    type Array_BTBCacheEntry_3 = Uses<[BTBCacheEntry]>;
+    type Array_BTBCacheEntry_4 = $<[BTBCacheEntry]>;
     
     /**
-     * - Name: `UnsafeCell<MatrixLRUState<3>>`
+     * - Name: `UnsafeCell<MatrixLRUState<4>>`
      * - Size: `8`
      * 
      * Fields:
      * | Name    | @   | Type                                         |
      * | ------- | --- | -------------------------------------------- |
-     * | `value` | `0` | {@link MatrixLRUState_3 `MatrixLRUState<3>`} |
+     * | `value` | `0` | {@link MatrixLRUState_4 `MatrixLRUState<4>`} |
      */
-    type UnsafeCell_MatrixLRUState_3 = Uses<[MatrixLRUState_3]>;
+    type UnsafeCell_MatrixLRUState_4 = $<[MatrixLRUState_4]>;
     
     /**
      * - Name: `BTBCacheEntry`
@@ -492,25 +493,25 @@ export namespace types {    type Uses<_ extends any[]> = never;
      * | `tag`    | `0` | `u64` |
      * | `target` | `8` | `u64` |
      */
-    type BTBCacheEntry = Uses<[]>;
+    type BTBCacheEntry = $<[]>;
     
     /**
-     * - Name: `MatrixLRUState<3>`
+     * - Name: `MatrixLRUState<4>`
      * - Size: `8`
      * 
      * Fields:
      * | Name     | @   | Type                                   |
      * | -------- | --- | -------------------------------------- |
      * | `matrix` | `0` | `u64`                                  |
-     * | `_n`     | `8` | {@link PhantomData_3 `PhantomData<3>`} |
+     * | `_n`     | `8` | {@link PhantomData_4 `PhantomData<4>`} |
      */
-    type MatrixLRUState_3 = Uses<[PhantomData_3]>;
+    type MatrixLRUState_4 = $<[PhantomData_4]>;
     
     /**
-     * - Name: `PhantomData<3>`
+     * - Name: `PhantomData<4>`
      * - Size: `0`
      */
-    type PhantomData_3 = Uses<[]>;
+    type PhantomData_4 = $<[]>;
 }
 
 export default module;

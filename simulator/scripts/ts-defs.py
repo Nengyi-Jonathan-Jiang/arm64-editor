@@ -173,7 +173,9 @@ module_contents: list[str] = [
     'readonly memory: WebAssembly.Memory;'
 ]
 aux_contents: list[str] = [
-    'type Uses<_ extends any[]> = never;', ''
+    '',
+    '/* Dummy helper type for syntactically indicating the types referenced by a type */',
+    'type $<_ extends any[]> = never;'
 ]
 
 typescript_reserved_words = """
@@ -375,7 +377,7 @@ for (name, typ) in dwarf_types.items():
 
     aux_contents.append('')
     aux_contents.append(f'/**\n * {'\n * '.join(doc)}\n */')
-    aux_contents.append(f'type {generated_type_references[name]} = Uses<[{
+    aux_contents.append(f'type {generated_type_references[name]} = $<[{
     ', '.join(
         j
         for i in referenced_types
