@@ -21,8 +21,8 @@ def unwrap_simply_derived_type(t: "TypeName") -> "TypeName":
     pointers and arrays
     """
     if isinstance(t, Reference) and not (
-        # Don't unwrap fat pointers; their layout is not fixed
-        isinstance(t.pointee, TraitObject) or isinstance(t.pointee, Slice)
+            # Don't unwrap fat pointers; their layout is not fixed
+            isinstance(t.pointee, TraitObject) or isinstance(t.pointee, Slice)
     ):
         return unwrap_simply_derived_type(t.pointee)
     elif isinstance(t, Array):
@@ -81,7 +81,7 @@ def _parse_typename(s: CharStream) -> TypeName:
 
 
 def _parse_name(
-    s: CharStream, parent: Name | None = None
+        s: CharStream, parent: Name | None = None
 ) -> Name:
     # Bracketed type
     if s.match('<'):
@@ -154,7 +154,10 @@ def _parse_type_prefix(s: CharStream) -> TypeName:
 
     # Trait object types
     if s.match('dyn '):
-        return TraitObject(_parse_name(s))
+        traits = [_parse_name(s)]
+        while s.match('+'):
+            traits.append(_parse_name(s))
+        return TraitObject(tuple(traits))
 
     # Reference types
     if s.match('&mut '):
@@ -264,7 +267,7 @@ class TypeName(ABC):
             if isinstance(t, TraitImpl):
                 return TraitImpl(strip(t.trait), t.implementing_type)
             if isinstance(t, TraitObject):
-                return TraitObject(strip(t.trait))
+                return TraitObject(tuple(strip(tr) for tr in t.traits))
             return t
 
         return self.apply_recursive(visit)
@@ -320,12 +323,12 @@ class TraitObject(TypeName):
     """
     A trait object, such as ``dyn Foo``
     """
-    trait: Name
+    traits: tuple[Name, ...]
 
-    def __repr__(self) -> str: return f'dyn {self.trait}'
+    def __repr__(self) -> str: return f'dyn {' + '.join(map(repr, self.traits))}'
 
     def apply_recursive(self, f: Callable[[TypeName], TypeName]) -> TypeName:
-        return f(TraitObject(self.trait))
+        return f(TraitObject(self.traits))
 
 
 @final

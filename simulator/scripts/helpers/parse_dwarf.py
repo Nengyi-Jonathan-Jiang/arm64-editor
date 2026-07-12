@@ -115,11 +115,9 @@ class DwarfParser:
         dwarf = re.sub(r'\s+\n', '\n', dwarf)
         tree, lookup = RawDwarfNode.parse('root', dwarf)
 
-        self.visit(tree, None)
-
         return tree, lookup
 
-    def visit(self, node: RawDwarfNode, namespace: Name | None) -> None:
+    def visit(self, node: RawDwarfNode, namespace: Name | None = None) -> None:
         if node.tag == TAG_NAMESPACE:
             name = _get_string(node.attributes.get(AT_NAME, None))
             if name is None:
@@ -128,24 +126,35 @@ class DwarfParser:
 
             for child in node.children:
                 self.visit(child, namespace)
-        elif node.tag == TAG_FUNC:
-            if func := self.visit_func(node, namespace):
-                self.exported_functions.append(func)
-        elif node.tag == TAG_VAR:
-            self.exported_variables.append(self.visit_var(node, namespace))
-        elif node.tag == TAG_STRUCT:
-            if v := node.find(lambda x: x.tag == TAG_VARIANT_PART):
-                if enum := self.visit_enum(node, v, namespace):
+            return
+
+        try:
+            if node.tag == TAG_FUNC:
+                if func := self.visit_func(node, namespace):
+                    self.exported_functions.append(func)
+                return
+            elif node.tag == TAG_VAR:
+                self.exported_variables.append(self.visit_var(node, namespace))
+                return
+            elif node.tag == TAG_STRUCT:
+                if v := node.find(lambda x: x.tag == TAG_VARIANT_PART):
+                    if enum := self.visit_enum(node, v, namespace):
+                        self.enums.append(enum)
+                else:
+                    if struct := self.parse_struct(node, namespace):
+                        self.structs.append(struct)
+                return
+            elif node.tag == TAG_ENUM:
+                if enum := self.visit_basic_enum(node, namespace):
                     self.enums.append(enum)
-            else:
-                if struct := self.parse_struct(node, namespace):
-                    self.structs.append(struct)
-        elif node.tag == TAG_ENUM:
-            if enum := self.visit_basic_enum(node, namespace):
-                self.enums.append(enum)
-        else:
-            for child in node.children:
-                self.visit(child, namespace)
+                return
+        except:
+            raise ValueError(f"Error encountered while parsing node {node.tag} ({
+            node.attributes.get('name', '<unknown>')
+            }) @ 0x{node.location:08x}")
+
+        for child in node.children:
+            self.visit(child, namespace)
 
     @staticmethod
     def visit_var(node: RawDwarfNode, namespace: Name | None) -> DVar:
@@ -261,7 +270,7 @@ class DwarfParser:
         )
 
     def visit_enum(
-        self, node: RawDwarfNode, v: RawDwarfNode, namespace: Name | None
+            self, node: RawDwarfNode, v: RawDwarfNode, namespace: Name | None
     ) -> DEnum | None:
         name_str, size = (
             _get_string(node.attributes.get(AT_NAME, '')),
@@ -437,7 +446,7 @@ class RawDwarfNode:
         line_index = 0
 
         def parse_node(
-            base_indent: int, base_tag: str, base_location: int | None = None
+                base_indent: int, base_tag: str, base_location: int | None = None
         ) -> RawDwarfNode:
             nonlocal line_index
 

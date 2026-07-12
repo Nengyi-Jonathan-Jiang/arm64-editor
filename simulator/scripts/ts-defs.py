@@ -59,6 +59,11 @@ try:
             i for i in (root.to_string(str_opts) for root in tree.children) if i
         ))
 
+    with open(f'./pkg/{basename}.dwarfdump.raw.txt', 'w') as f:
+        f.write('\n'.join(root.to_string() for root in tree.children))
+
+    dwarf_parser.visit(tree)
+
 except FileNotFoundError:
     print(
         'llvm-dwarfdump (optional) not found; skipping dwarf info',
@@ -87,13 +92,13 @@ dwarf_enums: dict[TypeName, DEnum] = {
     for i in dwarf_parser.enums
 }
 
-impls: dict[TraitObject, dset[TypeName]] = {}
+impls: dict[Name, dset[TypeName]] = {}
 
 
 def find_trait_impls(t: TypeName) -> TypeName:
     # print(t)
     if isinstance(t, TraitImpl):
-        impls.setdefault(TraitObject(t.trait), dset()).add(t.implementing_type)
+        impls.setdefault(t.trait, dset()).add(t.implementing_type)
     return t
 
 
@@ -141,7 +146,8 @@ def traverse(t: TypeName) -> Generator[TypeName | None]:
         yield from (i.type for i in dwarf_structs[t].members)
         # Include trait instantiations through dyn
         if trait_object := get_trait_object(t):
-            yield from impls.get(trait_object, [])
+            for tr in trait_object.traits:
+                yield from impls.get(tr, [])
 
 
 # Collect used_names into a dict from type name strings to the corresponding DStruct/DEnums
@@ -166,7 +172,9 @@ module_contents: list[str] = [
     '',
     'readonly memory: WebAssembly.Memory;'
 ]
-aux_contents: list[str] = []
+aux_contents: list[str] = [
+    'type Uses<_ extends any[]> = never;', ''
+]
 
 typescript_reserved_words = """
 any as boolean break case catch class const constructor continue debugger 
@@ -176,9 +184,23 @@ number of package private protected public require return set static string
 super switch symbol this throw true try type typeof var void while with yield
 """.strip().split()
 
+
+def simplify_typenum_name(n: TypeName) -> TypeName:
+    if isinstance(n, Name) and repr(n.namespace) == 'typenum::uint':
+        if n.name == 'UTerm':
+            return Name(None, '0', ())
+        if n.name == 'UInt':
+            return Name(None, str(int(repr(n.generic_args[0])) + 1), ())
+    return n
+
+
+def simplify_name(type_name: TypeName):
+    return type_name.apply_recursive(simplify_typenum_name).strip_namespaces()
+
+
 generated_type_references: dict[TypeName, str] = {}
 for id, typename in enumerate([*dwarf_types.keys()]):
-    type_str = typename.to_alphanumeric()
+    type_str = typename.apply_recursive(simplify_typenum_name).to_alphanumeric()
     if type_str in generated_type_references.values() or type_str in typescript_reserved_words:
         type_str = f'{type_str}${id}'
 
@@ -187,7 +209,7 @@ for id, typename in enumerate([*dwarf_types.keys()]):
 
 def quote_type(type_name: TypeName) -> str:
     referenced_typename = unwrap_simply_derived_type(type_name)
-    simple_typename = type_name.strip_namespaces()
+    simple_typename = simplify_name(type_name)
     if referenced_typename is not None and referenced_typename in generated_type_references:
         return f'{{@link {generated_type_references[referenced_typename]} `{simple_typename}`}}'
     else:
@@ -228,7 +250,7 @@ for func2 in exported_funcs:
 
         param_assignment: list[tuple[str, DInnerVar]] = []
         if not func2.WASM_type and func_info.return_type != '()' and len(
-            func2.params) == len(func_info.params) + 1:
+                func2.params) == len(func_info.params) + 1:
             param_assignment.append((
                 func2.params[0].link_name,
                 DInnerVar(
@@ -284,7 +306,7 @@ def generate_members_table(members: list[DStructMember]) -> list[str]:
 
     for member in members:
         field_table_entries.append((
-            f'`{member.name.strip_namespaces()}`',
+            f'`{simplify_name(member.name)}`',
             f'`{member.location}`',
             quote_type(member.type)
         ))
@@ -305,24 +327,29 @@ def generate_members_table(members: list[DStructMember]) -> list[str]:
 
 
 # Generate type list
-for id, (name, typ) in enumerate(dwarf_types.items()):
+for (name, typ) in dwarf_types.items():
     doc = [
-        f'- Name: `{typ.name.strip_namespaces()}`',
+        f'- Name: `{simplify_name(typ.name)}`',
         f'- Size: `{typ.size}`',
     ]
+
+    referenced_types: set[TypeName] = set()
 
     if isinstance(typ, DStruct):
         if typ.members:
             doc.append('')
             doc.append('Fields:')
             doc.extend(generate_members_table(typ.members))
+            referenced_types.update(member.type for member in typ.members)
 
         if trait_object := get_trait_object(name):
-            if trait_object in impls:
-                doc.append('')
-                doc.append(f'Implementations: {
-                ', '.join(quote_type(i) for i in impls[trait_object])
-                }')
+            for tr in trait_object.traits:
+                if tr in impls:
+                    doc.append('')
+                    doc.append(f'`{simplify_name(tr)}` implementations: {
+                    ', '.join(quote_type(i) for i in impls[tr])
+                    }')
+                    referenced_types.update(impls[tr])
 
     elif isinstance(typ, DEnum):
         discriminant = typ.discriminant
@@ -334,17 +361,24 @@ for id, (name, typ) in enumerate(dwarf_types.items()):
             doc.append("Variants:")
             for i in typ.variants:
                 doc.append("")
-                doc.append(f"- `{i.type.name.strip_namespaces()}` (discriminant value = `{
+                doc.append(f"- `{simplify_name(i.type.name)}` (discriminant value = `{
                 '<default>' if i.discriminant is None else i.discriminant
                 }`{
                 f', offset = `{i.location}`' if i.location else ''
                 }):")
 
                 doc.extend(generate_members_table(i.type.members))
+                referenced_types.update(member.type for member in i.type.members)
 
     aux_contents.append('')
     aux_contents.append(f'/**\n * {'\n * '.join(doc)}\n */')
-    aux_contents.append(f'type {generated_type_references[name]} = any;')
+    aux_contents.append(f'type {generated_type_references[name]} = Uses<[{
+    ', '.join(
+        j
+        for i in referenced_types
+        if (j := generated_type_references.get(unwrap_simply_derived_type(i))) is not None
+    )
+    }]>;')
 
 print('Writing to file')
 
@@ -378,8 +412,7 @@ with open(file_wasm_decompiled, 'w') as out:
         function_name, disambiguation = function_name[:100], function_name[100:]
 
         if function_name in dwarf_funcs:
-            function_name = str(
-                dwarf_funcs[function_name].name.strip_namespaces())
+            function_name = str(simplify_name(dwarf_funcs[function_name].name))
 
         # Add disambiguation chars back in
         if disambiguation:
