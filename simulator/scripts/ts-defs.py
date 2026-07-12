@@ -190,7 +190,10 @@ def simplify_typenum_name(n: TypeName) -> TypeName:
         if n.name == 'UTerm':
             return Name(None, '0', ())
         if n.name == 'UInt':
-            return Name(None, str(int(repr(n.generic_args[0])) + 1), ())
+            return Name(None, str(
+                int(repr(n.generic_args[0])) +
+                int(repr(n.generic_args[1])[-1]) + 1
+            ), ())
     return n
 
 
