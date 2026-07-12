@@ -1,12 +1,12 @@
+use crate::Allocation;
 use crate::components::sizes::{Addr, Byte};
 use crate::components::{MemoryAccess};
-use crate::unsafe_ref::UnsafeMutRef;
 
 pub struct DummyMemoryAccess {}
 
 impl DummyMemoryAccess {
-    pub fn new() -> UnsafeMutRef<dyn MemoryAccess> {
-        unsafe { UnsafeMutRef::new_from_ptr(0 as *mut Self).map_into(|x| x as _) }
+    pub fn new() -> Allocation<dyn MemoryAccess> {
+        todo!()
     }
 }
 

@@ -6,15 +6,15 @@ mod lru_cache;
 mod simulator;
 mod sizes;
 
-use crate::unsafe_ref::UnsafeMutRef;
+use crate::Allocation;
 
 use sizes::*;
 
 #[repr(C)]
 pub struct Simulator {
-    pub pipeline: UnsafeMutRef<dyn Pipeline>,
-    pub cache: UnsafeMutRef<dyn MemoryAccess>,
-    pub branch_predictor: UnsafeMutRef<dyn BranchPredictor>,
+    pub pipeline: Allocation<dyn Pipeline>,
+    pub cache: Allocation<dyn MemoryAccess>,
+    pub branch_predictor: Allocation<dyn BranchPredictor>,
 
     pub registers: [u64; 128], // Plenty of space for general purpose and FP/SIMD registers
 }

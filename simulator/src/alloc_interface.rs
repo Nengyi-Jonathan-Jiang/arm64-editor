@@ -1,3 +1,5 @@
+/// Defines an interface for bump allocation, which is the allocation method used by the rest of the
+/// code. This may be implemented for WASM using WASM linear memory or for normal
 use crate::transmute_assertions::check_transmute;
 use crate::zero_init::ZeroInit;
 use core::mem::{MaybeUninit, zeroed};
@@ -186,9 +188,14 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
     where
         Self: IAllocation<Target = ()>,
     {
-        // Safety: All bit patterns are valid for MaybeUninit; size guarantees on U by safety of
-        // containing function
-        unsafe { self.map_raw::<MaybeUninit<U>>(|_, _| {}) }
+        // Safety: by safety of <...>.as_mut_unchecked()
+        unsafe {
+            self.unsized_map::<MaybeUninit<U>>(|x| {
+                // Safety: All bit patterns are valid for MaybeUninit; guarantees on size of U by
+                // safety of containing function
+                (x as *mut () as *mut MaybeUninit<U>).as_mut_unchecked()
+            })
+        }
     }
 
     /// Give a slice type to a raw allocation.
@@ -206,6 +213,17 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
                 from_raw_parts_mut(x as *mut () as *mut MaybeUninit<U>, len)
             })
         }
+    }
+
+    unsafe fn transmute<U: Sized>(self) -> Self::MapResult<U> {
+        unsafe { self.unsized_map(|x| (x as *mut Self::Target as *mut U).as_mut_unchecked()) }
+    }
+
+    unsafe fn transmute_slice<T, U>(self) -> Self::MapResult<[U]>
+    where
+        Self: IAllocation<Target = [T]>,
+    {
+        unsafe { self.unsized_map(|x| from_raw_parts_mut(x as *mut [T] as *mut U, x.len())) }
     }
 }
 

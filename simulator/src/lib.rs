@@ -2,20 +2,41 @@
 #![allow(incomplete_features)]
 #![feature(unsafe_cell_access)]
 #![feature(decl_macro)]
+#![feature(const_type_name)]
 // Enable std if we are testing
 #[cfg(feature = "std")]
 extern crate std;
 
+use crate::alloc_interface::{IAlloc, IAllocation};
+use crate::extend_meta::extend_meta;
+use core::ops::{Deref, DerefMut};
+
 pub mod components;
 pub mod params;
 
-// Only include interop when not testing (otherwise a lot of stuff breaks)
-mod transmute_assertions;
-mod unsafe_ref;
-#[cfg(target_arch = "wasm32")]
-mod wasm;
+pub mod transmute_assertions;
+
+extend_meta! {
+    #[cfg(target_arch = "wasm32")]
+    mod wasm;
+    pub type Alloc = wasm::wasm_allocator::WASMAlloc;
+}
+extend_meta! {
+    #[cfg(all(feature="std", not(target_arch = "wasm32")))]
+    mod native_alloc;
+    pub type Alloc = native_alloc::NativeAllocator;
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "std"))]
+compile_error!("Cannot have std when target_arch=wasm32");
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "std")))]
+compile_error!("Alloc is only defined when target_arch=wasm32 or feature=std");
+
+pub type Allocation<T> = <Alloc as IAlloc>::Allocation<T>;
+
+mod alloc_interface;
+mod extend_meta;
 mod zero_init;
-mod simple_alloc;
 
 // Without wasm panic handler we also have to define our own
 #[cfg(all(not(feature = "std"), not(test)))]

@@ -5,7 +5,7 @@ skip_git_env_info = true
 
 [tasks.build]
 command = "cargo"
-args = ["build", " --no-default-features", "--target", "wasm32-unknown-unknown", "--profile", "wasm"]
+args = ["build", "--no-default-features", "--target", "wasm32-unknown-unknown", "--profile", "wasm"]
 
 [tasks.pkg]
 script = """

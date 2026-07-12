@@ -1,9 +1,11 @@
+use crate::alloc_interface::{IAlloc, IAllocation};
 use crate::components::BranchPredictor;
 use crate::components::lru_cache::{FixedSizeLRUCache, LRUCache};
 use crate::components::sizes::Addr;
 use crate::params::StaticBranchPredictionMode;
-use crate::unsafe_ref::UnsafeMutRef;
 use crate::zero_init::ZeroInit;
+use crate::{Alloc, Allocation};
+use core::mem::MaybeUninit;
 use core::ptr::slice_from_raw_parts_mut;
 use hybrid_array::ArraySize;
 use typenum::{U0, U1, U2, U4, Unsigned};
@@ -110,8 +112,8 @@ struct BranchPredictorBase<
     BTBAssociativity: ArraySize,
 > {
     static_mode: StaticBranchPredictionMode,
-    branch_target_buffer: UnsafeMutRef<[FixedSizeLRUCache<BTBCacheEntry, BTBAssociativity>]>,
-    branch_history_table: UnsafeMutRef<[u8]>,
+    branch_target_buffer: Allocation<[FixedSizeLRUCache<BTBCacheEntry, BTBAssociativity>]>,
+    branch_history_table: Allocation<[u8]>,
 }
 
 /// Provides a new() function that can be used to construct a BranchPredictor
@@ -122,16 +124,14 @@ pub trait ConstructBranchPredictor {
     /// Unsafe:
     /// - `get_mem` must return a memory allocation with the given size and alignment in bytes that
     ///   satisfies the lifetime semantics of [`UnsafeMutRef`]
-    fn new<F: Fn(usize, usize) -> *mut ()>(
-        get_mem: F,
+    fn new(
         btb_size_log: u8,
         bht_size_log: u8,
         static_mode: StaticBranchPredictionMode,
-    ) -> UnsafeMutRef<dyn BranchPredictor>;
+    ) -> Allocation<dyn BranchPredictor>;
 }
 
 /// Unsafe:
-/// - Zeroed memory must be a valid value of `EntryData`
 /// - The only non-zero-sized field in Self must be a BranchPredictorBase<EntryData>
 unsafe trait UseBranchPredictorBase
 where
@@ -257,36 +257,32 @@ fn index_bht<EntrySizeBits: Unsigned>(bht_len: usize, addr: Addr) -> BHTIndexer 
 
 impl<T: UseBranchPredictorBase> ConstructBranchPredictor for T {
     //noinspection RsUnresolvedPath (RustRover has issues with associated consts in generics)
-    fn new<F: Fn(usize, usize) -> *mut ()>(
-        get_mem: F,
+    fn new(
         btb_size_log: u8,
         bht_size_log: u8,
         static_mode: StaticBranchPredictionMode,
-    ) -> UnsafeMutRef<dyn BranchPredictor> {
-        fn get_mem_for<T: ZeroInit>(len: usize, get_mem: &impl Fn(usize, usize) -> *mut ()) -> *mut T {
-            get_mem(size_of::<T>() * len, align_of::<T>()) as *mut T
-        }
+    ) -> Allocation<dyn BranchPredictor> {
+        type Cache<T> =
+            FixedSizeLRUCache<BTBCacheEntry, <T as UseBranchPredictorBase>::BTBAssociativity>;
 
         let btb_len: usize = 1 << btb_size_log;
         let bht_len = (T::BHTEntrySizeBits::USIZE << bht_size_log).div_ceil(8);
 
-        let res_mem = get_mem(size_of::<T>(), align_of::<T>()) as *mut T;
-        let btb_mem =
-            get_mem_for::<FixedSizeLRUCache<BTBCacheEntry, T::BTBAssociativity>>(btb_len, &get_mem);
-        let bht_mem = get_mem_for::<u8>(bht_len, &get_mem);
+        let btb_slice = Alloc::append_uninit_slice::<Cache<T>>(btb_len).init_slice_zeroed();
+        let bht_slice = Alloc::append_uninit_slice::<u8>(bht_len).init_slice_zeroed();
 
-        let btb_slice = slice_from_raw_parts_mut(btb_mem, btb_len);
-        let bht_slice = slice_from_raw_parts_mut(bht_mem, bht_len);
+        let res = Alloc::append_uninit::<BranchPredictorBase<T::BTBAssociativity>>();
 
-        let mut res = unsafe { UnsafeMutRef::new_from_ptr(res_mem) };
-
-        let base = res.base_mut();
-        base.static_mode = static_mode;
         unsafe {
-            base.branch_target_buffer = UnsafeMutRef::new_from_ptr(btb_slice);
-            base.branch_history_table = UnsafeMutRef::new_from_ptr(bht_slice);
+            res.init(|uninit_base| {
+                uninit_base.write(BranchPredictorBase {
+                    static_mode,
+                    branch_target_buffer: btb_slice,
+                    branch_history_table: bht_slice,
+                });
+            })
+            .transmute::<T>()
+            .unsized_map(|x: &mut T| x as &mut dyn BranchPredictor)
         }
-
-        unsafe { res.transmute_into::<T>().map_into(|x| x as _) }
     }
 }

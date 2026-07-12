@@ -1,11 +1,11 @@
 use crate::components::{BranchPredictor, MemoryAccess, Pipeline, Simulator};
-use crate::unsafe_ref::UnsafeMutRef;
+use crate::Allocation;
 
 impl Simulator {
     pub fn new(
-        pipeline: UnsafeMutRef<dyn Pipeline>,
-        cache: UnsafeMutRef<dyn MemoryAccess>,
-        branch_predictor: UnsafeMutRef<dyn BranchPredictor>
+        pipeline: Allocation<dyn Pipeline>,
+        cache: Allocation<dyn MemoryAccess>,
+        branch_predictor: Allocation<dyn BranchPredictor>
     ) -> Self {
         Self {
             pipeline,
