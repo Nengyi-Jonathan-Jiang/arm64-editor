@@ -143,7 +143,7 @@ where
     /// entries per byte)
     type BHTEntrySizeBits: ArraySize;
 
-    /// Initial byte value used to initialize memory
+    /// Initial byte value used to bht memory
     const INITIAL_BYTE: u8;
 
     /// Given the bht state, predict whether the branch will be taken
@@ -268,21 +268,22 @@ impl<T: UseBranchPredictorBase> ConstructBranchPredictor for T {
         let btb_len: usize = 1 << btb_size_log;
         let bht_len = (T::BHTEntrySizeBits::USIZE << bht_size_log).div_ceil(8);
 
-        let btb_slice = Alloc::append_uninit_slice::<Cache<T>>(btb_len).init_slice_zeroed();
-        let bht_slice = Alloc::append_uninit_slice::<u8>(bht_len).init_slice_zeroed();
+        let foo = Alloc::append_uninit_slice::<Cache<T>>(btb_len);
+        let btb_slice = foo.init_slice_zeroed();
+        let bht_slice = Alloc::append_uninit_slice::<u8>(bht_len)
+            .map_slice(|_, _| T::INITIAL_BYTE);
 
-        let res = Alloc::append_uninit::<BranchPredictorBase<T::BTBAssociativity>>();
+        let res = Alloc::append_uninit::<BranchPredictorBase<T::BTBAssociativity>>().map(|_| {
+            BranchPredictorBase {
+                static_mode,
+                branch_target_buffer: btb_slice,
+                branch_history_table: bht_slice,
+            }
+        });
 
         unsafe {
-            res.init(|uninit_base| {
-                uninit_base.write(BranchPredictorBase {
-                    static_mode,
-                    branch_target_buffer: btb_slice,
-                    branch_history_table: bht_slice,
-                });
-            })
-            .transmute::<T>()
-            .unsized_map(|x: &mut T| x as &mut dyn BranchPredictor)
+            res.transmute::<T>()
+                .unsized_map(|x: &mut T| x as &mut dyn BranchPredictor)
         }
     }
 }

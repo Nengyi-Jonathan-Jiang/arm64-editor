@@ -19,7 +19,7 @@ pub mod transmute_assertions;
 extend_meta! {
     #[cfg(target_arch = "wasm32")]
     mod wasm;
-    pub type Alloc = wasm::wasm_allocator::WASMAlloc;
+    pub type Alloc = wasm::wasm_alloc::WASMAlloc;
 }
 extend_meta! {
     #[cfg(all(feature="std", not(target_arch = "wasm32")))]
@@ -37,6 +37,7 @@ pub type Allocation<T> = <Alloc as IAlloc>::Allocation<T>;
 mod alloc_interface;
 mod extend_meta;
 mod zero_init;
+mod identity;
 
 // Without wasm panic handler we also have to define our own
 #[cfg(all(not(feature = "std"), not(test)))]

@@ -1,5 +1,3 @@
 mod globals;
-mod js_interop;
-
+pub mod wasm_alloc;
 mod wasm_mutex;
-pub mod wasm_allocator;

@@ -1,3 +1,4 @@
+use crate::identity::Identity;
 /// Defines an interface for bump allocation, which is the allocation method used by the rest of the
 /// code. This may be implemented for WASM using WASM linear memory or for normal
 use crate::transmute_assertions::check_transmute;
@@ -54,15 +55,15 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
         mut f: impl FnMut(*mut T, *mut U, usize),
     ) -> Self::MapResult<[U]>
     where
-        Self: IAllocation<Target = [T]>,
+        Self::Target: Identity<Type = [T]>,
     {
         check_transmute!(T as U);
         unsafe {
             // Safety: T and U are the same size and the length of the slice doesn't change, so the
             // returned slice points to exactly the same memory as `src`
             self.unsized_map::<[U]>(move |src| {
+                let src = src.id_mut() as *mut [T];
                 let len = src.len();
-                let src = src as *mut [T];
 
                 let base = src as *mut T;
 
@@ -102,7 +103,7 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
     /// Maps the slice element-by-element, reusing the allocation.
     fn map_slice<T, U>(self, mut f: impl FnMut(T, usize) -> U) -> Self::MapResult<[U]>
     where
-        Self: IAllocation<Target = [T]>,
+        Self::Target: Identity<Type = [T]>,
     {
         check_transmute!(T as U);
         unsafe {
@@ -123,13 +124,13 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
     /// Safety: `f` must initialize its parameter.
     unsafe fn init<T>(self, f: impl FnOnce(&mut MaybeUninit<T>)) -> Self::MapResult<T>
     where
-        Self: IAllocation<Target = MaybeUninit<T>>,
+        Self::Target: Sized + Identity<Type = MaybeUninit<T>>,
     {
         unsafe {
             // Safety: guaranteed by `f`
             self.map_raw::<T>(|src, _| {
                 // Safety: by validity of src
-                f(src.as_mut_unchecked())
+                f(src.as_mut_unchecked().id_mut())
             })
         }
     }
@@ -142,7 +143,7 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
         mut f: impl FnMut(&mut MaybeUninit<T>, usize),
     ) -> Self::MapResult<[T]>
     where
-        Self: IAllocation<Target = [MaybeUninit<T>]>,
+        Self::Target: Identity<Type = [MaybeUninit<T>]>,
     {
         unsafe {
             // Safety: guaranteed by `f`
@@ -156,7 +157,7 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
     /// Zero-init the allocation
     fn init_zeroed<T: ZeroInit>(self) -> Self::MapResult<T>
     where
-        Self: IAllocation<Target = MaybeUninit<T>>,
+        Self::Target: Sized + Identity<Type = MaybeUninit<T>>,
     {
         unsafe {
             // Safety: by `x.write(...)`
@@ -170,7 +171,7 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
     /// Zero-init the allocation
     fn init_slice_zeroed<T: ZeroInit>(self) -> Self::MapResult<[T]>
     where
-        Self: IAllocation<Target = [MaybeUninit<T>]>,
+        Self::Target: Identity<Type = [MaybeUninit<T>]>,
     {
         unsafe {
             // Safety: by `x.write(...)`
@@ -186,14 +187,14 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
     /// Safety: `size_of::<U>()` must be exactly the size of the allocation.
     unsafe fn to_uninit<U>(self) -> Self::MapResult<MaybeUninit<U>>
     where
-        Self: IAllocation<Target = ()>,
+        Self::Target: Identity<Type = ()>,
     {
         // Safety: by safety of <...>.as_mut_unchecked()
         unsafe {
             self.unsized_map::<MaybeUninit<U>>(|x| {
                 // Safety: All bit patterns are valid for MaybeUninit; guarantees on size of U by
                 // safety of containing function
-                (x as *mut () as *mut MaybeUninit<U>).as_mut_unchecked()
+                (x.id_mut() as *mut () as *mut MaybeUninit<U>).as_mut_unchecked()
             })
         }
     }
@@ -203,27 +204,40 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
     /// Safety: `size_of::<U>() * len` must be exactly the size of the allocation.
     unsafe fn to_uninit_slice<U>(self, len: usize) -> Self::MapResult<[MaybeUninit<U>]>
     where
-        Self: IAllocation<Target = ()>,
+        Self::Target: Identity<Type = ()>,
     {
         unsafe {
             // Safety: by safety of `from_raw_parts_mut(...)`
             self.unsized_map::<[MaybeUninit<U>]>(|x| {
                 // Safety: All bit patterns are valid for MaybeUninit; guarantees on size of U and
                 // len by safety of containing function
-                from_raw_parts_mut(x as *mut () as *mut MaybeUninit<U>, len)
+                from_raw_parts_mut(x.id_mut() as *mut () as *mut MaybeUninit<U>, len)
             })
         }
     }
 
-    unsafe fn transmute<U: Sized>(self) -> Self::MapResult<U> {
+    /// Transmute an allocation.
+    ///
+    /// Safety: same as [`core::mem::transmute`]
+    unsafe fn transmute<U: Sized>(self) -> Self::MapResult<U>
+    where
+        Self::Target: Sized,
+    {
         unsafe { self.unsized_map(|x| (x as *mut Self::Target as *mut U).as_mut_unchecked()) }
     }
 
+    /// Transmute an allocation.
+    ///
+    /// Safety: same as [`core::mem::transmute`]
     unsafe fn transmute_slice<T, U>(self) -> Self::MapResult<[U]>
     where
-        Self: IAllocation<Target = [T]>,
+        Self::Target: Identity<Type = [T]>,
     {
-        unsafe { self.unsized_map(|x| from_raw_parts_mut(x as *mut [T] as *mut U, x.len())) }
+        unsafe {
+            self.unsized_map(|x| {
+                from_raw_parts_mut(x.id_mut() as *mut [T] as *mut U, x.id_mut().len())
+            })
+        }
     }
 }
 

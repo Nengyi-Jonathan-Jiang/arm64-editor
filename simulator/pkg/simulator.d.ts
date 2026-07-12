@@ -69,7 +69,7 @@ export namespace types {
      * | `pipeline_params`   | `5` | {@link PipelineParams `PipelineParams`}               |
      * | `branch_prediction` | `8` | {@link BranchPredictorParams `BranchPredictorParams`} |
      */
-    type SimulatorParams = $<[CacheParams, PipelineParams, BranchPredictorParams]>;
+    type SimulatorParams = $<[PipelineParams, CacheParams, BranchPredictorParams]>;
     
     /**
      * - Name: `Mutex<Option<Simulator>>`
@@ -95,7 +95,7 @@ export namespace types {
      * | `branch_predictor` | `16` | {@link WASMAllocation_dyn_BranchPredictor `WASMAllocation<dyn BranchPredictor>`} |
      * | `registers`        | `24` | `[u64 ; 128]`                                                                    |
      */
-    type Simulator = $<[WASMAllocation_dyn_MemoryAccess, WASMAllocation_dyn_BranchPredictor, WASMAllocation_dyn_Pipeline]>;
+    type Simulator = $<[WASMAllocation_dyn_MemoryAccess, WASMAllocation_dyn_Pipeline, WASMAllocation_dyn_BranchPredictor]>;
     
     /**
      * - Name: `CacheParams`
@@ -122,7 +122,7 @@ export namespace types {
      * | `pipeline_mode` | `0` | {@link PipelineMode `PipelineMode`}       |
      * | `cycle_times`   | `1` | {@link CycleTimeParams `CycleTimeParams`} |
      */
-    type PipelineParams = $<[CycleTimeParams, PipelineMode]>;
+    type PipelineParams = $<[PipelineMode, CycleTimeParams]>;
     
     /**
      * - Name: `BranchPredictorParams`
@@ -355,7 +355,7 @@ export namespace types {
      * 
      * `BranchPredictor` implementations: {@link Predictor0 `Predictor0`}, {@link Predictor1 `Predictor1`}, {@link Predictor2 `Predictor2`}
      */
-    type ptr_mut_dyn_BranchPredictor = $<[ptr_mut_dyn_BranchPredictor, Predictor1, Predictor2, Predictor0]>;
+    type ptr_mut_dyn_BranchPredictor = $<[ptr_mut_dyn_BranchPredictor, Predictor0, Predictor1, Predictor2]>;
     
     /**
      * - Name: `Predictor0`
@@ -401,7 +401,7 @@ export namespace types {
      * | `branch_history_table` | `8`  | {@link WASMAllocation_u8 `WASMAllocation<[u8]>`}                                                                 |
      * | `static_mode`          | `16` | {@link StaticBranchPredictionMode `StaticBranchPredictionMode`}                                                  |
      */
-    type BranchPredictorBase_4 = $<[WASMAllocation_u8, WASMAllocation_FixedSizeLRUCache_BTBCacheEntry_4, StaticBranchPredictionMode]>;
+    type BranchPredictorBase_4 = $<[StaticBranchPredictionMode, WASMAllocation_FixedSizeLRUCache_BTBCacheEntry_4, WASMAllocation_u8]>;
     
     /**
      * - Name: `WASMAllocation<[FixedSizeLRUCache<BTBCacheEntry, 4>]>`
@@ -459,7 +459,7 @@ export namespace types {
      * | `data`  | `0`  | {@link Array_BTBCacheEntry_4 `Array<BTBCacheEntry, 4>`}             |
      * | `state` | `64` | {@link UnsafeCell_MatrixLRUState_4 `UnsafeCell<MatrixLRUState<4>>`} |
      */
-    type FixedSizeLRUCache_BTBCacheEntry_4 = $<[UnsafeCell_MatrixLRUState_4, Array_BTBCacheEntry_4]>;
+    type FixedSizeLRUCache_BTBCacheEntry_4 = $<[Array_BTBCacheEntry_4, UnsafeCell_MatrixLRUState_4]>;
     
     /**
      * - Name: `Array<BTBCacheEntry, 4>`
