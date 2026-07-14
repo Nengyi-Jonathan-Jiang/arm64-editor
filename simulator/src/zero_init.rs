@@ -1,5 +1,6 @@
 use core::cell::{Cell, RefCell, UnsafeCell};
 use core::marker::{PhantomData, PhantomPinned};
+use hybrid_array::{Array, ArraySize};
 
 /// A marker trait indicating that a type can be zero-initialized, and that the [`Default`]
 /// implementation is equivalent to zero-initialization.
@@ -26,6 +27,8 @@ unsafe impl ZeroInit for f64 {}
 
 // Implement ZeroInit for arrays
 unsafe impl<T: ZeroInit, const N: usize> ZeroInit for [T; N] where [T; N]: Default {}
+// Implement ZeroInit for typenum arrays
+unsafe impl<T: ZeroInit, N: ArraySize> ZeroInit for Array<T, N> where T: Default {}
 // Implement ZeroInit for tuples (including Unit)
 unsafe impl ZeroInit for () {}
 unsafe impl<T: ZeroInit> ZeroInit for (T,) {}

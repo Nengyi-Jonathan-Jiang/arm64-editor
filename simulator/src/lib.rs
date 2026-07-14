@@ -1,15 +1,16 @@
 #![no_std]
-#![allow(incomplete_features)]
 #![feature(unsafe_cell_access)]
 #![feature(decl_macro)]
-#![feature(const_type_name)]
+
+// Make sure we always export functions as extern "C";
+#![deny(improper_ctypes)]
+#![deny(improper_ctypes_definitions)]
 // Enable std if we are testing
 #[cfg(feature = "std")]
 extern crate std;
 
-use crate::alloc_interface::{IAlloc, IAllocation};
+use crate::alloc_interface::IAlloc;
 use crate::extend_meta::extend_meta;
-use core::ops::{Deref, DerefMut};
 
 pub mod components;
 pub mod params;
@@ -36,8 +37,8 @@ pub type Allocation<T> = <Alloc as IAlloc>::Allocation<T>;
 
 mod alloc_interface;
 mod extend_meta;
-mod zero_init;
 mod identity;
+mod zero_init;
 
 // Without wasm panic handler we also have to define our own
 #[cfg(all(not(feature = "std"), not(test)))]

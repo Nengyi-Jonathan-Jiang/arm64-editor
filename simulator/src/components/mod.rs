@@ -107,3 +107,46 @@ pub trait BranchPredictor {
     // Update whether the branch was taken or not
     fn update_branch(&mut self, addr: Addr, did_jump: bool);
 }
+
+#[unsafe(export_name="thingie")]
+fn do_thing(x: &mut &mut dyn BranchPredictor) {
+    x.predict(0);
+    x.update_target(0, 0);
+    x.update_branch(0, false);
+}
+#[unsafe(export_name="thingie2")]
+extern "C" fn do_thing_2(x: &mut &mut [u8]) {
+    x[0]=0u8;
+}
+#[unsafe(export_name="thingie3")]
+extern "C" fn do_thing_3(x: u64) {
+    assert_eq!(x, 2);
+}
+
+
+/*
+  [ High Memory Addresses: 0xFFFFFFFF ]
+  +-----------------------------------+
+
+  |      Environment Variables        |  <-- OS environment vars & arguments
+  +-----------------------------------+
+
+  |               STACK               |  <-- Grows DOWNWARD (towards low addresses)
+  |                 |                 |
+  |                 v                 |
+  |                                   |  <-- Unallocated space (shared gap)
+  |                 ^                 |
+  |                 |                 |
+  |               HEAP                |  <-- Grows UPWARD (towards high addresses)
+  +-----------------------------------+
+
+  |        Uninitialized Data         |  <-- BSS segment (zero-filled)
+  +-----------------------------------+
+
+  |         Initialized Data          |  <-- Data segment (global & static vars)
+  +-----------------------------------+
+
+  |         Instruction (Text)        |  <-- Binary code (Read-Only)
+  +-----------------------------------+
+  [ Low Memory Addresses:  0x00000000 ]
+ */

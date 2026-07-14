@@ -37,14 +37,13 @@ pub trait LRUCache<T> {
     }
 }
 
+// It makes sense to allow zero init'ing when data is logically zero-init-able
 #[derive(zeroInit_lenient!)]
 pub struct FixedSizeLRUCache<T, N: ArraySize> {
     // Use raw UnsafeCell; we want to be as efficient as possible
     state: UnsafeCell<MatrixLRUState<N>>,
     data: Array<T, N>,
 }
-
-unsafe impl<T: Default, N: ArraySize> ZeroInit for FixedSizeLRUCache<T, N> {}
 
 impl<T, N: ArraySize> FixedSizeLRUCache<T, N> {
     fn update(&self, i: usize) {
@@ -115,7 +114,8 @@ impl<N: ArraySize> Default for MatrixLRUState<N> {
     fn default() -> Self {
         Self {
             // The zero matrix trivially satisfies the invariant -- it represents the case where no
-            // element was accessed more recently than any other element
+            // element was accessed more recently than any other element -- and is the natural
+            // default, by the same reasoning
             matrix: 0,
             _n: PhantomData,
         }

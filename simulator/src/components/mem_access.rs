@@ -11,7 +11,7 @@ impl DummyMemoryAccess {
 }
 
 impl MemoryAccess for DummyMemoryAccess {
-    fn get(&mut self, addr: Addr) -> Result<&mut u8, ()> {
+    fn get(&mut self, _: Addr) -> Result<&mut u8, ()> {
         Err(())
     }
 

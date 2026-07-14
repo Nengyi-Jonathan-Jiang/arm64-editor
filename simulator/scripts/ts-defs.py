@@ -21,6 +21,17 @@ try:
         check=True
     ).stdout.decode('utf-8')
     exported_vars, exported_funcs = parse_decompiled(decompiled_text)
+
+    imports_dump_text = subprocess.run(
+        f'wasm-objdump -j Import -x "{file_wasm_debug}"',
+        stdout=subprocess.PIPE,
+        check=True
+    ).stdout.decode('utf-8')
+    imports_dump_functions = {
+        fix_link_name(k): v
+        for k, v in
+        re.findall(r"^ - func.*<(\w+)> <- env.(.*)", imports_dump_text, re.MULTILINE)
+    }
 except FileNotFoundError:
     print(
         'Could not decompile binary; is wasm-decompile installed?',
@@ -408,8 +419,19 @@ with open(file_ts_defs, 'w') as out:
     ]))
 
 with open(file_wasm_decompiled, 'w') as out:
+    # simulator.debug.wasm:   file format wasm 0x1
+    # module name: <simulator.wasm>
+    #
+    # Section Details:
+    #
+    # Import[1]:
+    #  - func[0] sig=3 <_RNvNtNtNtCs4SVIwzLixF9_9simulator4wasm10wasm_alloc20wasm_alloc_internals26request_enough_mem_for_ptr> <- env.request_enough_mem_for_ptr
+
     def replace_mangled(mangled: re.Match[str]) -> str:
         function_name = mangled.group(1)
+
+        if function_name in imports_dump_functions:
+            return imports_dump_functions[function_name] + mangled.group(2)
 
         # wasm-decompile chops names at 100 chars and may add disambiguation
         # characters afterward. To make sure we don't discard disambiguation,
@@ -418,6 +440,10 @@ with open(file_wasm_decompiled, 'w') as out:
 
         if function_name in dwarf_funcs:
             function_name = str(simplify_name(dwarf_funcs[function_name].name))
+        else:
+            print(f"Could not find name {function_name}")
+            # Don't do anything
+            return mangled.group()
 
         # Add disambiguation chars back in
         if disambiguation:

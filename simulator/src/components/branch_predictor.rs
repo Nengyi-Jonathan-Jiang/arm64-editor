@@ -1,12 +1,9 @@
 use crate::alloc_interface::{IAlloc, IAllocation};
 use crate::components::BranchPredictor;
 use crate::components::lru_cache::{FixedSizeLRUCache, LRUCache};
-use crate::components::sizes::Addr;
+use crate::components::sizes::{Addr, INSTRUCTION_SIZE_BYTES, Instruction};
 use crate::params::StaticBranchPredictionMode;
-use crate::zero_init::ZeroInit;
 use crate::{Alloc, Allocation};
-use core::mem::MaybeUninit;
-use core::ptr::slice_from_raw_parts_mut;
 use hybrid_array::ArraySize;
 use typenum::{U0, U1, U2, U4, Unsigned};
 
@@ -100,10 +97,22 @@ unsafe impl UseBranchPredictorBase for Predictor2 {
     }
 }
 
-#[derive(Default)]
+/// NOT ZeroInit
 struct BTBCacheEntry {
     tag: Addr,
     target: Addr,
+}
+
+impl Default for BTBCacheEntry {
+    fn default() -> Self {
+        Self {
+            // 0b1000...000 is definitely not a valid address; to get there we would need to have
+            // used more than 9 exabytes of memory from either end of the address space
+            tag: (Addr::MAX >> 1) + 1,
+            // If we do end up there somehow, do horrible things
+            target: 1,
+        }
+    }
 }
 
 struct BranchPredictorBase<
@@ -160,9 +169,12 @@ where
 
 impl<T: UseBranchPredictorBase> BranchPredictor for T {
     fn predict(&self, addr: Addr) -> Option<Addr> {
-        let btb = &self.base().branch_target_buffer;
-        let BTBIndexer { index, tag } = index_btb(btb.len(), addr);
-        let predicted_target_addr = btb[index].get(|x| x.tag == tag)?.target;
+        let predicted_target_addr = {
+            let btb = &self.base().branch_target_buffer;
+            let BTBIndexer { index, tag } = index_btb(btb.len(), addr);
+
+            btb[index].get(|x| x.tag == tag)?.target
+        };
 
         let static_prediction = match self.base().static_mode {
             StaticBranchPredictionMode::Always => true,
@@ -171,17 +183,18 @@ impl<T: UseBranchPredictorBase> BranchPredictor for T {
             StaticBranchPredictionMode::Directional => addr > predicted_target_addr,
         };
 
-        if T::BHTEntrySizeBits::USIZE == 0 {
-            return if static_prediction { Some(addr) } else { None };
-        }
+        let bht_entry = if T::BHTEntrySizeBits::USIZE != 0 {
+            let bht = &self.base().branch_history_table;
+            let BHTIndexer {
+                byte_index,
+                mask,
+                shift,
+            } = index_bht::<T::BHTEntrySizeBits>(bht.len(), addr);
 
-        let bht = &self.base().branch_history_table;
-        let BHTIndexer {
-            byte_index,
-            mask,
-            shift,
-        } = index_bht::<T::BHTEntrySizeBits>(bht.len(), addr);
-        let bht_entry = (bht[byte_index] >> shift) & mask;
+            (bht[byte_index] >> shift) & mask
+        } else {
+            0
+        };
 
         if T::dynamic_predict(bht_entry, static_prediction) {
             Some(predicted_target_addr)
@@ -233,14 +246,15 @@ struct BHTIndexer {
 }
 
 fn index_btb(table_len: usize, addr: Addr) -> BTBIndexer {
-    let index = (addr & (table_len - 1) as Addr) as usize;
-    let tag = addr ^ (index as Addr);
+    let addr = addr as usize / INSTRUCTION_SIZE_BYTES;
+    let index = addr & (table_len - 1);
+    let tag = (addr ^ index) as Addr;
 
     BTBIndexer { index, tag }
 }
 
 fn index_bht<EntrySizeBits: Unsigned>(bht_len: usize, addr: Addr) -> BHTIndexer {
-    let index = (addr & (bht_len - 1) as Addr) as usize;
+    let index = (addr as usize / INSTRUCTION_SIZE_BYTES) & (bht_len - 1);
 
     let entries_per_byte = 8 / EntrySizeBits::USIZE;
 
@@ -256,28 +270,25 @@ fn index_bht<EntrySizeBits: Unsigned>(bht_len: usize, addr: Addr) -> BHTIndexer 
 }
 
 impl<T: UseBranchPredictorBase> ConstructBranchPredictor for T {
-    //noinspection RsUnresolvedPath (RustRover has issues with associated consts in generics)
     fn new(
         btb_size_log: u8,
         bht_size_log: u8,
         static_mode: StaticBranchPredictionMode,
     ) -> Allocation<dyn BranchPredictor> {
-        type Cache<T> =
-            FixedSizeLRUCache<BTBCacheEntry, <T as UseBranchPredictorBase>::BTBAssociativity>;
-
-        let btb_len: usize = 1 << btb_size_log;
+        let btb_len = 1 << btb_size_log;
         let bht_len = (T::BHTEntrySizeBits::USIZE << bht_size_log).div_ceil(8);
 
-        let foo = Alloc::append_uninit_slice::<Cache<T>>(btb_len);
-        let btb_slice = foo.init_slice_zeroed();
-        let bht_slice = Alloc::append_uninit_slice::<u8>(bht_len)
-            .map_slice(|_, _| T::INITIAL_BYTE);
+        let branch_target_buffer =
+            Alloc::alloc_slice::<FixedSizeLRUCache<BTBCacheEntry, T::BTBAssociativity>>(btb_len)
+                .init_slice_with(|_| Default::default());
+        let branch_history_table =
+            Alloc::alloc_slice::<u8>(bht_len).map_slice(|_, _| T::INITIAL_BYTE);
 
-        let res = Alloc::append_uninit::<BranchPredictorBase<T::BTBAssociativity>>().map(|_| {
+        let res = Alloc::alloc::<BranchPredictorBase<T::BTBAssociativity>>().map(|_| {
             BranchPredictorBase {
                 static_mode,
-                branch_target_buffer: btb_slice,
-                branch_history_table: bht_slice,
+                branch_target_buffer,
+                branch_history_table,
             }
         });
 
@@ -285,5 +296,25 @@ impl<T: UseBranchPredictorBase> ConstructBranchPredictor for T {
             res.transmute::<T>()
                 .unsized_map(|x: &mut T| x as &mut dyn BranchPredictor)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_static_predictor() {
+        let mut predictor = Predictor0::new(4, 6, StaticBranchPredictionMode::Always);
+        let p: &mut dyn BranchPredictor = &mut *predictor;
+
+        // No entries should exist
+        assert_eq!(p.predict(0), None);
+        assert_eq!(p.predict(4), None);
+        assert_eq!(p.predict(12), None);
+        assert_eq!(p.predict(20), None);
+        assert_eq!(p.predict(264), None);
+        // The trap entry
+        assert_eq!(p.predict(0x8000_0000_0000_0000), Some(1));
     }
 }

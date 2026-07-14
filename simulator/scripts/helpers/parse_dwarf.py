@@ -6,7 +6,7 @@ from .typename import *
 
 __all__ = [
     "DFunc", "DVar", "DStruct", "DStructMember", "DEnum", "DEnumDiscriminant", "DEnumVariant",
-    "DInnerVar", "DwarfParser", "RawDwarfNode"
+    "DInnerVar", "DwarfParser", "RawDwarfNode", "fix_link_name"
 ]
 
 
@@ -343,12 +343,12 @@ class DwarfParser:
         if type is None:
             type = ''
         # wasm-decompile does some extra stuff to names that we approximate here
-        link_name = _fix_link_name(link_name)
+        link_name = fix_link_name(link_name)
 
         return name, link_name, type
 
 
-def _fix_link_name(s: str) -> str:
+def fix_link_name(s: str) -> str:
     # Fix names to match wasm-decompile output
     # See include/wabt/decompiler-naming.h in github.com/WebAssembly/wabt/
 

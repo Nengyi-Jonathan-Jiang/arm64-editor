@@ -9,9 +9,11 @@ pub struct DummyPipeline {}
 
 impl DummyPipeline {
     pub fn new() -> Allocation<dyn Pipeline> {
-        let x = Alloc::append_uninit::<DummyPipeline>().init_zeroed();
-        type x = <<Alloc as IAlloc>::Allocation<u8> as IAllocation>::MapResult<u8>;
-        todo!()
+        unsafe {
+            Alloc::alloc::<DummyPipeline>()
+                .init_zeroed()
+                .unsized_map(|x| x as &mut dyn Pipeline)
+        }
     }
 }
 

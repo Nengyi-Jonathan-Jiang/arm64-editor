@@ -49,6 +49,36 @@ export const module : {
     
     /**
      * - Rust return type: `()`
+     * - Rust name: `simulator::components::do_thing`
+     * @param a
+     *      - WASM type: `int_ptr`
+     *      - Rust type: {@link ptr_mut_dyn_BranchPredictor `&mut *mut dyn BranchPredictor`}
+     *      - Rust name: `x`
+     */
+    thingie(a: number): void;
+    
+    /**
+     * - Rust return type: `()`
+     * - Rust name: `simulator::components::do_thing_2`
+     * @param a
+     *      - WASM type: `{ a:int, b:int }`
+     *      - Rust type: {@link ptr_mut_u8 `&mut *mut [u8]`}
+     *      - Rust name: `x`
+     */
+    thingie2(a: number): void;
+    
+    /**
+     * - Rust return type: `()`
+     * - Rust name: `simulator::components::do_thing_3`
+     * @param a
+     *      - WASM type: `long`
+     *      - Rust type: `u64`
+     *      - Rust name: `x`
+     */
+    thingie3(a: number): void;
+    
+    /**
+     * - Rust return type: `()`
      * - Rust name: `simulator::wasm::globals::update_simulator_params`
      */
     updateParams(): void;
@@ -69,7 +99,7 @@ export namespace types {
      * | `pipeline_params`   | `5` | {@link PipelineParams `PipelineParams`}               |
      * | `branch_prediction` | `8` | {@link BranchPredictorParams `BranchPredictorParams`} |
      */
-    type SimulatorParams = $<[PipelineParams, CacheParams, BranchPredictorParams]>;
+    type SimulatorParams = $<[CacheParams, BranchPredictorParams, PipelineParams]>;
     
     /**
      * - Name: `Mutex<Option<Simulator>>`
@@ -98,6 +128,32 @@ export namespace types {
     type Simulator = $<[WASMAllocation_dyn_MemoryAccess, WASMAllocation_dyn_Pipeline, WASMAllocation_dyn_BranchPredictor]>;
     
     /**
+     * - Name: `*mut dyn BranchPredictor`
+     * - Size: `8`
+     * 
+     * Fields:
+     * | Name      | @   | Type                                                           |
+     * | --------- | --- | -------------------------------------------------------------- |
+     * | `pointer` | `0` | {@link ptr_mut_dyn_BranchPredictor `*mut dyn BranchPredictor`} |
+     * | `vtable`  | `4` | `&[usize ; 6]`                                                 |
+     * 
+     * `BranchPredictor` implementations: {@link Predictor0 `Predictor0`}, {@link Predictor1 `Predictor1`}, {@link Predictor2 `Predictor2`}
+     */
+    type ptr_mut_dyn_BranchPredictor = $<[ptr_mut_dyn_BranchPredictor, Predictor1, Predictor0, Predictor2]>;
+    
+    /**
+     * - Name: `*mut [u8]`
+     * - Size: `8`
+     * 
+     * Fields:
+     * | Name       | @   | Type      |
+     * | ---------- | --- | --------- |
+     * | `data_ptr` | `0` | `*mut u8` |
+     * | `length`   | `4` | `usize`   |
+     */
+    type ptr_mut_u8 = $<[]>;
+    
+    /**
      * - Name: `CacheParams`
      * - Size: `5`
      * 
@@ -122,7 +178,7 @@ export namespace types {
      * | `pipeline_mode` | `0` | {@link PipelineMode `PipelineMode`}       |
      * | `cycle_times`   | `1` | {@link CycleTimeParams `CycleTimeParams`} |
      */
-    type PipelineParams = $<[PipelineMode, CycleTimeParams]>;
+    type PipelineParams = $<[CycleTimeParams, PipelineMode]>;
     
     /**
      * - Name: `BranchPredictorParams`
@@ -191,6 +247,39 @@ export namespace types {
      * | `ptr` | `0` | {@link ptr_mut_dyn_BranchPredictor `*mut dyn BranchPredictor`} |
      */
     type WASMAllocation_dyn_BranchPredictor = $<[ptr_mut_dyn_BranchPredictor]>;
+    
+    /**
+     * - Name: `Predictor0`
+     * - Size: `20`
+     * 
+     * Fields:
+     * | Name   | @   | Type                                                   |
+     * | ------ | --- | ------------------------------------------------------ |
+     * | `base` | `0` | {@link BranchPredictorBase_4 `BranchPredictorBase<4>`} |
+     */
+    type Predictor0 = $<[BranchPredictorBase_4]>;
+    
+    /**
+     * - Name: `Predictor1`
+     * - Size: `20`
+     * 
+     * Fields:
+     * | Name   | @   | Type                                                   |
+     * | ------ | --- | ------------------------------------------------------ |
+     * | `base` | `0` | {@link BranchPredictorBase_4 `BranchPredictorBase<4>`} |
+     */
+    type Predictor1 = $<[BranchPredictorBase_4]>;
+    
+    /**
+     * - Name: `Predictor2`
+     * - Size: `20`
+     * 
+     * Fields:
+     * | Name   | @   | Type                                                   |
+     * | ------ | --- | ------------------------------------------------------ |
+     * | `base` | `0` | {@link BranchPredictorBase_4 `BranchPredictorBase<4>`} |
+     */
+    type Predictor2 = $<[BranchPredictorBase_4]>;
     
     /**
      * - Name: `CachePolicy`
@@ -328,8 +417,10 @@ export namespace types {
      * | --------- | --- | ------------------------------------------------ |
      * | `pointer` | `0` | {@link ptr_mut_dyn_Pipeline `*mut dyn Pipeline`} |
      * | `vtable`  | `4` | `&[usize ; 5]`                                   |
+     * 
+     * `Pipeline` implementations: {@link DummyPipeline `DummyPipeline`}
      */
-    type ptr_mut_dyn_Pipeline = $<[ptr_mut_dyn_Pipeline]>;
+    type ptr_mut_dyn_Pipeline = $<[DummyPipeline, ptr_mut_dyn_Pipeline]>;
     
     /**
      * - Name: `*mut dyn MemoryAccess`
@@ -344,53 +435,6 @@ export namespace types {
     type ptr_mut_dyn_MemoryAccess = $<[ptr_mut_dyn_MemoryAccess]>;
     
     /**
-     * - Name: `*mut dyn BranchPredictor`
-     * - Size: `8`
-     * 
-     * Fields:
-     * | Name      | @   | Type                                                           |
-     * | --------- | --- | -------------------------------------------------------------- |
-     * | `pointer` | `0` | {@link ptr_mut_dyn_BranchPredictor `*mut dyn BranchPredictor`} |
-     * | `vtable`  | `4` | `&[usize ; 6]`                                                 |
-     * 
-     * `BranchPredictor` implementations: {@link Predictor0 `Predictor0`}, {@link Predictor1 `Predictor1`}, {@link Predictor2 `Predictor2`}
-     */
-    type ptr_mut_dyn_BranchPredictor = $<[ptr_mut_dyn_BranchPredictor, Predictor0, Predictor1, Predictor2]>;
-    
-    /**
-     * - Name: `Predictor0`
-     * - Size: `20`
-     * 
-     * Fields:
-     * | Name   | @   | Type                                                   |
-     * | ------ | --- | ------------------------------------------------------ |
-     * | `base` | `0` | {@link BranchPredictorBase_4 `BranchPredictorBase<4>`} |
-     */
-    type Predictor0 = $<[BranchPredictorBase_4]>;
-    
-    /**
-     * - Name: `Predictor1`
-     * - Size: `20`
-     * 
-     * Fields:
-     * | Name   | @   | Type                                                   |
-     * | ------ | --- | ------------------------------------------------------ |
-     * | `base` | `0` | {@link BranchPredictorBase_4 `BranchPredictorBase<4>`} |
-     */
-    type Predictor1 = $<[BranchPredictorBase_4]>;
-    
-    /**
-     * - Name: `Predictor2`
-     * - Size: `20`
-     * 
-     * Fields:
-     * | Name   | @   | Type                                                   |
-     * | ------ | --- | ------------------------------------------------------ |
-     * | `base` | `0` | {@link BranchPredictorBase_4 `BranchPredictorBase<4>`} |
-     */
-    type Predictor2 = $<[BranchPredictorBase_4]>;
-    
-    /**
      * - Name: `BranchPredictorBase<4>`
      * - Size: `20`
      * 
@@ -401,7 +445,13 @@ export namespace types {
      * | `branch_history_table` | `8`  | {@link WASMAllocation_u8 `WASMAllocation<[u8]>`}                                                                 |
      * | `static_mode`          | `16` | {@link StaticBranchPredictionMode `StaticBranchPredictionMode`}                                                  |
      */
-    type BranchPredictorBase_4 = $<[StaticBranchPredictionMode, WASMAllocation_FixedSizeLRUCache_BTBCacheEntry_4, WASMAllocation_u8]>;
+    type BranchPredictorBase_4 = $<[StaticBranchPredictionMode, WASMAllocation_u8, WASMAllocation_FixedSizeLRUCache_BTBCacheEntry_4]>;
+    
+    /**
+     * - Name: `DummyPipeline`
+     * - Size: `0`
+     */
+    type DummyPipeline = $<[]>;
     
     /**
      * - Name: `WASMAllocation<[FixedSizeLRUCache<BTBCacheEntry, 4>]>`
@@ -436,18 +486,6 @@ export namespace types {
      * | `length`   | `4` | `usize`                                                                              |
      */
     type ptr_mut_FixedSizeLRUCache_BTBCacheEntry_4 = $<[FixedSizeLRUCache_BTBCacheEntry_4]>;
-    
-    /**
-     * - Name: `*mut [u8]`
-     * - Size: `8`
-     * 
-     * Fields:
-     * | Name       | @   | Type      |
-     * | ---------- | --- | --------- |
-     * | `data_ptr` | `0` | `*mut u8` |
-     * | `length`   | `4` | `usize`   |
-     */
-    type ptr_mut_u8 = $<[]>;
     
     /**
      * - Name: `FixedSizeLRUCache<BTBCacheEntry, 4>`

@@ -154,18 +154,39 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
         }
     }
 
+    /// Initialize the allocation
+    fn init_with<T>(self, value: T) -> Self::MapResult<T>
+    where
+        Self::Target: Sized + Identity<Type = MaybeUninit<T>>,
+    {
+        unsafe {
+            // Safety: by `f.write(...)`
+            self.init(|x| {
+                x.write(value);
+            })
+        }
+    }
+
+    /// Initialize the allocation
+    fn init_slice_with<T>(self, mut f: impl FnMut(usize) -> T) -> Self::MapResult<[T]>
+    where
+        Self::Target: Identity<Type = [MaybeUninit<T>]>,
+    {
+        unsafe {
+            // Safety: by `f.write(...)`
+            self.init_slice(|x, i| {
+                x.write(f(i));
+            })
+        }
+    }
+
     /// Zero-init the allocation
     fn init_zeroed<T: ZeroInit>(self) -> Self::MapResult<T>
     where
         Self::Target: Sized + Identity<Type = MaybeUninit<T>>,
     {
-        unsafe {
-            // Safety: by `x.write(...)`
-            self.init(|x| {
-                // Safety: T is ZeroInit
-                x.write(zeroed());
-            })
-        }
+        // Safety: T is ZeroInit
+        self.init_with(unsafe { zeroed() })
     }
 
     /// Zero-init the allocation
@@ -173,13 +194,8 @@ pub unsafe trait IAllocation: core::ops::DerefMut + Sized {
     where
         Self::Target: Identity<Type = [MaybeUninit<T>]>,
     {
-        unsafe {
-            // Safety: by `x.write(...)`
-            self.init_slice(|x, _| {
-                // Safety: T is ZeroInit
-                x.write(zeroed());
-            })
-        }
+        // Safety: T is ZeroInit
+        self.init_slice_with(|_| unsafe { zeroed() })
     }
 
     /// Give a type to a raw allocation.
@@ -247,24 +263,24 @@ pub unsafe trait IAlloc {
     type Allocation<T: ?Sized>: IAllocation<Target = T>;
 
     /// Allocate the given number of bytes with the given alignment
-    fn append_raw(num_bytes: usize, alignment: usize) -> Self::Allocation<()>;
+    fn alloc_raw(num_bytes: usize, alignment: usize) -> Self::Allocation<()>;
 
     /// Allocate an uninitialized `T`
-    fn append_uninit<T: Sized>() -> Self::Allocation<MaybeUninit<T>>
+    fn alloc<T: Sized>() -> Self::Allocation<MaybeUninit<T>>
     where
         Self::Allocation<()>:
             IAllocation<MapResult<MaybeUninit<T>> = Self::Allocation<MaybeUninit<T>>>,
     {
-        unsafe { Self::append_raw(size_of::<T>(), align_of::<T>()).to_uninit::<T>() }
+        unsafe { Self::alloc_raw(size_of::<T>(), align_of::<T>()).to_uninit::<T>() }
     }
 
     /// Allocate an uninitialized `[T]`
-    fn append_uninit_slice<T: ZeroInit>(len: usize) -> Self::Allocation<[MaybeUninit<T>]>
+    fn alloc_slice<T: Sized>(len: usize) -> Self::Allocation<[MaybeUninit<T>]>
     where
         Self::Allocation<()>:
             IAllocation<MapResult<[MaybeUninit<T>]> = Self::Allocation<[MaybeUninit<T>]>>,
     {
-        unsafe { Self::append_raw(size_of::<T>() * len, align_of::<T>()).to_uninit_slice(len) }
+        unsafe { Self::alloc_raw(size_of::<T>() * len, align_of::<T>()).to_uninit_slice(len) }
     }
 
     /// Invalidates all previous allocations.

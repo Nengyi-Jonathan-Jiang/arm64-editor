@@ -65,7 +65,7 @@ pub struct WASMAlloc;
 unsafe impl IAlloc for WASMAlloc {
     type Allocation<T: ?Sized> = WASMAllocation<T>;
 
-    fn append_raw(num_bytes: usize, alignment: usize) -> Self::Allocation<()> {
+    fn alloc_raw(num_bytes: usize, alignment: usize) -> Self::Allocation<()> {
         #[cfg(debug_assertions)]
         {
             *NUM_ACTIVE_ALLOCATIONS.lock() += 1;
@@ -146,6 +146,6 @@ mod wasm_alloc_internals {
 
     #[allow(unused_unsafe)] // TODO: why does cargo check warn about this?
     const fn heap_base() -> *mut () {
-        (unsafe { &raw const __heap_base }) as *mut ()
+        ( unsafe { &raw const __heap_base }) as *mut ()
     }
 }

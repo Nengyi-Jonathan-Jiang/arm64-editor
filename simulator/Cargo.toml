@@ -10,31 +10,33 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 typenum = { version = "1.20.1", default-features = false }
 hybrid-array = { version = "0.4.13", default-features = false }
-macro_rules_attribute = "0.2.2"
+macro_rules_attribute = { version = "0.2.2", default-features = false }
 [dev-dependencies]
 
 [profile.dev]
 
 # Optimization settings
-opt-level = "s" # Small code size
-lto = true      # Link-time stripping of unused functions
-strip = "none"  # Used and stripped out by later pass
-debug = true    # Used and stripped out by later pass
+opt-level = 0
 incremental = false
 
 # Assertion settings
 debug-assertions = true
 overflow-checks = true
 panic = "abort" # Don't include heavy code for handling panics in WASM
+dwarf-debug-info = true
 
 [profile.test]  # Inherits from dev. We assume this is not run on a WASM target
 # Note that tests ignore panic setting and always use unwind behavior
 
 [profile.wasm]      # Basically release profile
 inherits = "dev"
+opt-level = "s" # Small code size
+lto = true      # Link-time stripping of unused functions
 debug-assertions = false
 overflow-checks = false
 codegen-units = 1   # Shouldn't be too slow; we're not dealing with huge amounts of code
+
+# Keep strip and debug from [profile.dev]; these are stripped out by later passes
 
 [features]
 default = ["std"]
