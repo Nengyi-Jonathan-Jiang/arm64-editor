@@ -108,22 +108,6 @@ pub trait BranchPredictor {
     fn update_branch(&mut self, addr: Addr, did_jump: bool);
 }
 
-#[unsafe(export_name="thingie")]
-fn do_thing(x: &mut &mut dyn BranchPredictor) {
-    x.predict(0);
-    x.update_target(0, 0);
-    x.update_branch(0, false);
-}
-#[unsafe(export_name="thingie2")]
-extern "C" fn do_thing_2(x: &mut &mut [u8]) {
-    x[0]=0u8;
-}
-#[unsafe(export_name="thingie3")]
-extern "C" fn do_thing_3(x: u64) {
-    assert_eq!(x, 2);
-}
-
-
 /*
   [ High Memory Addresses: 0xFFFFFFFF ]
   +-----------------------------------+

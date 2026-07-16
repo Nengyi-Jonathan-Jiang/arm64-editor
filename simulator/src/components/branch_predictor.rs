@@ -106,11 +106,8 @@ struct BTBCacheEntry {
 impl Default for BTBCacheEntry {
     fn default() -> Self {
         Self {
-            // 0b1000...000 is definitely not a valid address; to get there we would need to have
-            // used more than 9 exabytes of memory from either end of the address space
-            tag: (Addr::MAX >> 1) + 1,
-            // If we do end up there somehow, do horrible things
-            target: 1,
+            tag: 1,    // Never a valid tag
+            target: 1, // Doesn't matter, our corresponding tag is never generated
         }
     }
 }
@@ -204,16 +201,17 @@ impl<T: UseBranchPredictorBase> BranchPredictor for T {
     }
 
     fn update_target(&mut self, addr: Addr, target_addr: Addr) {
-        let btb = &mut self.base_mut().branch_target_buffer;
+        let btb = self.base_mut().branch_target_buffer.as_mut();
         let BTBIndexer { index, tag } = index_btb(btb.len(), addr);
 
-        btb[index].get_or_insert(
-            |x| x.tag == tag,
-            |entry| {
-                entry.tag = tag;
-                entry.target = target_addr;
-            },
-        );
+        btb[index]
+            .get_or_insert(
+                |x| x.tag == tag,
+                |entry| {
+                    entry.tag = tag;
+                },
+            )
+            .target = target_addr;
     }
 
     fn update_branch(&mut self, addr: Addr, did_jump: bool) {
@@ -236,24 +234,29 @@ impl<T: UseBranchPredictorBase> BranchPredictor for T {
 }
 
 struct BTBIndexer {
+    /// The index in the btb corresponding to the address
     index: usize,
+    /// The upper bits of the address not used for indexing
     tag: Addr,
 }
 struct BHTIndexer {
+    /// The index of the byte to read from
     byte_index: usize,
+    /// The bit position in the byte to index
     shift: usize,
+    /// A mask for just the bits we are interested in
     mask: u8,
 }
 
-fn index_btb(table_len: usize, addr: Addr) -> BTBIndexer {
+const fn index_btb(table_len: usize, addr: Addr) -> BTBIndexer {
     let addr = addr as usize / INSTRUCTION_SIZE_BYTES;
     let index = addr & (table_len - 1);
-    let tag = (addr ^ index) as Addr;
+    let tag = (addr ^ (index * INSTRUCTION_SIZE_BYTES)) as Addr;
 
     BTBIndexer { index, tag }
 }
 
-fn index_bht<EntrySizeBits: Unsigned>(bht_len: usize, addr: Addr) -> BHTIndexer {
+const fn index_bht<EntrySizeBits: Unsigned>(bht_len: usize, addr: Addr) -> BHTIndexer {
     let index = (addr as usize / INSTRUCTION_SIZE_BYTES) & (bht_len - 1);
 
     let entries_per_byte = 8 / EntrySizeBits::USIZE;
@@ -303,18 +306,115 @@ impl<T: UseBranchPredictorBase> ConstructBranchPredictor for T {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_static_predictor() {
-        let mut predictor = Predictor0::new(4, 6, StaticBranchPredictionMode::Always);
-        let p: &mut dyn BranchPredictor = &mut *predictor;
+    /// BTB cache index repeats per `(2 ** 4) * sizeof Instruction = 64` bytes, storing total
+    /// `(2 ** 4) * (BTB Assoc) = 64` entries
+    const BTB_SIZE_LOG: u8 = 4;
+    /// BHT repeats per `(2 ** 8) * sizeof Instruction = 1024` bytes, storing total `2 ** 8 = 256`
+    /// entries
+    const BHT_SIZE_LOG: u8 = 8;
 
-        // No entries should exist
-        assert_eq!(p.predict(0), None);
-        assert_eq!(p.predict(4), None);
-        assert_eq!(p.predict(12), None);
-        assert_eq!(p.predict(20), None);
-        assert_eq!(p.predict(264), None);
-        // The trap entry
-        assert_eq!(p.predict(0x8000_0000_0000_0000), Some(1));
+    macro check_predict {
+        ($p:ident, $($e:tt -> $r: tt),+ $(,)?) => {
+            $(
+            check_predict!(@ $p, $e + 0, $r);
+            )+
+        },
+        (@ $p:ident, $e:expr, ()) => {
+            assert_eq!($p.predict($e), None)
+        },
+        (@ $p:ident, $e:expr, $r: literal) => {
+            assert_eq!($p.predict($e), Some($r))
+        }
+    }
+
+    #[test]
+    fn test_static_predictor_always() {
+        let p = &mut *Predictor0::new(
+            BTB_SIZE_LOG,
+            BHT_SIZE_LOG,
+            StaticBranchPredictionMode::Always,
+        );
+
+        // No entries are in the table
+        check_predict!(p,
+            0 -> (), 4 -> (), 8 -> (), 20 -> (), 264 -> (),
+            (Addr::MAX & !(INSTRUCTION_SIZE_BYTES as Addr - 1)) -> (),
+        );
+
+        p.update_target(8, 12);
+
+        check_predict!(p,
+            0 -> (), 4 -> (),
+            8 -> 12, // We just updated this one
+            20 -> (),
+            264 -> (), // Note that this has the same index of 8, but should still return nothing
+            (Addr::MAX & !(INSTRUCTION_SIZE_BYTES as Addr - 1)) -> ()
+        );
+
+        p.update_target(8, 4);
+
+        check_predict!(p,
+            0 -> (), 4 -> (),
+            8 -> 4, // We just updated this one
+            20 -> (),
+            264 -> (),
+            (Addr::MAX & !(INSTRUCTION_SIZE_BYTES as Addr - 1)) -> ()
+        );
+    }
+
+    #[test]
+    fn test_static_predictor_never() {
+        let p = &mut *Predictor0::new(
+            BTB_SIZE_LOG,
+            BHT_SIZE_LOG,
+            StaticBranchPredictionMode::Never,
+        );
+
+        // Always predict not taken
+        check_predict!(p,
+            0 -> (), 4 -> (), 8 -> (), 20 -> (), 264 -> (),
+            (Addr::MAX & !(INSTRUCTION_SIZE_BYTES as Addr - 1)) -> ()
+        );
+
+        p.update_target(8, 4);
+
+        check_predict!(p,
+            0 -> (), 4 -> (), 8 -> (), 20 -> (), 264 -> (),
+            (Addr::MAX & !(INSTRUCTION_SIZE_BYTES as Addr - 1)) -> ()
+        );
+    }
+
+    #[test]
+    fn test_static_predictor_directional() {
+        let p = &mut *Predictor0::new(
+            BTB_SIZE_LOG,
+            BHT_SIZE_LOG,
+            StaticBranchPredictionMode::Directional,
+        );
+
+        // No entries are in the table
+        check_predict!(p,
+            0 -> (), 4 -> (), 8 -> (), 20 -> (), 264 -> (),
+            (Addr::MAX & !(INSTRUCTION_SIZE_BYTES as Addr - 1)) -> (),
+        );
+
+        p.update_target(8, 12);
+
+        // 8 has a forward jump, which should not be predicted taken
+        check_predict!(p,
+            0 -> (), 4 -> (), 8 -> (), 20 -> (), 264 -> (),
+            (Addr::MAX & !(INSTRUCTION_SIZE_BYTES as Addr - 1)) -> (),
+        );
+
+        p.update_target(8, 4);
+
+        // 8 now has a backward jump, which should be predicted taken
+        check_predict!(p,
+            0 -> (), 4 -> (),
+            8 -> 4, // We just updated this one
+            20 -> (),
+            264 -> (),
+            (Addr::MAX & !(INSTRUCTION_SIZE_BYTES as Addr - 1)) -> ()
+        );
     }
 }
