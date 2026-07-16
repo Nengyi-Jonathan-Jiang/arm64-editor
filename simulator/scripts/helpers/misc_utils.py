@@ -14,7 +14,7 @@ class dset(Generic[T]):
 
     Use `set_items()` to get the items in the set. This is equivalent to `keys()` but more readable
 
-    This provides set methods such `add` and `extend`
+    This provides set methods such `add` and `update`
     """
 
     def __init__(self, iterable: Iterable[T] = ()):
@@ -26,7 +26,7 @@ class dset(Generic[T]):
     def add(self, item: T) -> None:
         self.dict[item] = None
 
-    def extend(self, iterable: Iterable[T]) -> None:
+    def update(self, iterable: Iterable[T]) -> None:
         for i in iterable:
             self.add(i)
 

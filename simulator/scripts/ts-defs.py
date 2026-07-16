@@ -349,7 +349,7 @@ for (name, typ) in dwarf_types.items():
         f'- Size: `{typ.size}`',
     ]
 
-    referenced_types: set[TypeName] = set()
+    referenced_types: dset[TypeName] = dset()
 
     if isinstance(typ, DStruct):
         if typ.members:
@@ -441,7 +441,6 @@ with open(file_wasm_decompiled, 'w') as out:
         if function_name in dwarf_funcs:
             function_name = str(simplify_name(dwarf_funcs[function_name].name))
         else:
-            print(f"Could not find name {function_name}")
             # Don't do anything
             return mangled.group()
 
