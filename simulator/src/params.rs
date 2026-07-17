@@ -1,3 +1,5 @@
+use crate::components::sizes::Addr;
+
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
 pub struct SimulatorParams {
@@ -74,6 +76,16 @@ pub enum StaticBranchPredictionMode {
     Never = 1,
     /// Conditional branches are predicted to be taken if backwards (predicted target < addr)
     Directional = 2,
+}
+
+impl StaticBranchPredictionMode {
+    pub fn static_predict(&self, addr: Addr, target: Addr) -> bool {
+        match self {
+            StaticBranchPredictionMode::Always => true,
+            StaticBranchPredictionMode::Never => false,
+            StaticBranchPredictionMode::Directional => addr > target,
+        }
+    }
 }
 
 #[repr(u8)]

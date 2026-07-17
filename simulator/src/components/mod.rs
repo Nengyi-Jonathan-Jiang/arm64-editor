@@ -1,10 +1,10 @@
 pub mod branch_predictor;
 pub mod mem_access;
 pub mod pipeline;
+pub mod sizes;
 
 mod lru_cache;
 mod simulator;
-mod sizes;
 
 use crate::Allocation;
 
@@ -97,10 +97,16 @@ pub trait MemoryAccess {
     }
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum BranchPredictionResult {
+    Taken(Addr),
+    NotTaken,
+}
+
 pub trait BranchPredictor {
     // Predict whether an instruction is a branch that will be taken, and the target address of the
     // branch
-    fn predict(&self, addr: Addr) -> Option<Addr>;
+    fn predict(&self, addr: Addr) -> Option<BranchPredictionResult>;
 
     // Update the target of the branch instruction.
     fn update_target(&mut self, addr: Addr, target_addr: Addr);
@@ -109,28 +115,28 @@ pub trait BranchPredictor {
 }
 
 /*
-  [ High Memory Addresses: 0xFFFFFFFF ]
-  +-----------------------------------+
+ [ High Memory Addresses: 0xFFFFFFFF ]
+ +-----------------------------------+
 
-  |      Environment Variables        |  <-- OS environment vars & arguments
-  +-----------------------------------+
+ |      Environment Variables        |  <-- OS environment vars & arguments
+ +-----------------------------------+
 
-  |               STACK               |  <-- Grows DOWNWARD (towards low addresses)
-  |                 |                 |
-  |                 v                 |
-  |                                   |  <-- Unallocated space (shared gap)
-  |                 ^                 |
-  |                 |                 |
-  |               HEAP                |  <-- Grows UPWARD (towards high addresses)
-  +-----------------------------------+
+ |               STACK               |  <-- Grows DOWNWARD (towards low addresses)
+ |                 |                 |
+ |                 v                 |
+ |                                   |  <-- Unallocated space (shared gap)
+ |                 ^                 |
+ |                 |                 |
+ |               HEAP                |  <-- Grows UPWARD (towards high addresses)
+ +-----------------------------------+
 
-  |        Uninitialized Data         |  <-- BSS segment (zero-filled)
-  +-----------------------------------+
+ |        Uninitialized Data         |  <-- BSS segment (zero-filled)
+ +-----------------------------------+
 
-  |         Initialized Data          |  <-- Data segment (global & static vars)
-  +-----------------------------------+
+ |         Initialized Data          |  <-- Data segment (global & static vars)
+ +-----------------------------------+
 
-  |         Instruction (Text)        |  <-- Binary code (Read-Only)
-  +-----------------------------------+
-  [ Low Memory Addresses:  0x00000000 ]
- */
+ |         Instruction (Text)        |  <-- Binary code (Read-Only)
+ +-----------------------------------+
+ [ Low Memory Addresses:  0x00000000 ]
+*/

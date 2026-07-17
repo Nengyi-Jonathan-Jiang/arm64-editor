@@ -1,0 +1,14 @@
+Notes on branch prediction:
+
+When we encounter an instruction in the fetch stage, there are two scenarios:
+
+1) Current address not in BTB (This is exact because BTB stores tags). In this
+   case, assume the instruction is not a branch and send a signal to the decode
+   stage. The decode stage can then (if the instruction is a branch) update the
+   BTB and apply static branch prediction (possibly flushing fetch).
+
+2) Current address is in BTB. In this case, we know we have a branch
+   instruction and can immediately apply dynamic prediction without stalling.
+
+Finally, when the instruction hits the execute stage, conditional branches can
+be resolved (possibly flushing fetch and decode).
